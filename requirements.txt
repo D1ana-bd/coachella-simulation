@@ -3,3 +3,6 @@ numpy
 matplotlib
 pygame
 networkx
+simpy
+scipy
+seaborn
