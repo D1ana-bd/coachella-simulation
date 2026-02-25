@@ -6,3 +6,4 @@ networkx
 simpy
 scipy
 seaborn
+pytest

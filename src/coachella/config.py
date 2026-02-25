@@ -1,5 +1,5 @@
 """
-config.py - Configurações centrais da simulação Coachella
+config.py - Configurações centrais da simulação coachella
 Todos os parâmetros do festival, agentes e visualização ficam aqui.
 """
 
@@ -60,7 +60,7 @@ WATCH_DURATION_MAX = 60         # tempo máximo
 # MÉTRICAS & OUTPUT
 # ─────────────────────────────────────────────
 METRICS_INTERVAL = 10           # recolher métricas a cada X minutos de sim
-OUTPUT_DIR = "outputs/"
+OUTPUT_DIR = "src/coachella/data/"
 METRICS_FILE = OUTPUT_DIR + "metrics.csv"
 LOG_FILE = OUTPUT_DIR + "simulation.log"
 
