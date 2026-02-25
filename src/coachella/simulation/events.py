@@ -6,13 +6,15 @@ Inclui o concert_scheduler que gere a abertura/fecho dos palcos por horários.
 
 import simpy
 import random
+import math
 from src.coachella.utils.logger import get_logger
 from src.coachella.config import (
     PATIENCE_MIN, PATIENCE_MAX,
     WATCH_DURATION_MIN, WATCH_DURATION_MAX,
     SERVICE_TIME_MEAN, SERVICE_TIME_STD,
     NUM_AGENTS, AGENT_SPAWN_RATE,
-    MAX_WAIT_FOR_SHOW,
+    MAX_WAIT_FOR_SHOW, STAGES,
+    FESTIVAL_ENTRANCE, AGENT_MOVE_SPEED,
 )
 from src.coachella.simulation.environment import FestivalEnvironment, Stage
 
@@ -26,7 +28,7 @@ logger = get_logger(__name__)
 class Agent:
     """
     Representa um festivaleiro.
-    Cada agente tem um id único, paciência e duração de visita aleatórias.
+    Cada agente tem um id único, paciência, duração de visita e posição visual.
     """
 
     _id_counter = 0
@@ -39,11 +41,11 @@ class Agent:
 
         # Estado para visualização / métricas
         self.current_stage: str | None = None
-        self.status: str = "arriving"   # arriving | waiting_show | queuing | watching | leaving
+        self.status: str = "arriving"   # arriving | moving | waiting_show | queuing | watching | leaving
 
-        # Posição atual para animação (x, y) — usado pelo Pygame
-        self.x: float = 0.0
-        self.y: float = 0.0
+        # Posição visual atual (começa na entrada do festival)
+        self.x: float = float(FESTIVAL_ENTRANCE["x"])
+        self.y: float = float(FESTIVAL_ENTRANCE["y"])
 
     def __repr__(self):
         return f"Agent({self.id}, status={self.status})"
@@ -52,6 +54,36 @@ class Agent:
     def reset_counter(cls):
         """Útil para testes — reseta o contador de IDs."""
         cls._id_counter = 0
+
+
+# ─────────────────────────────────────────────
+# PROCESSO: MOVIMENTO VISUAL
+# ─────────────────────────────────────────────
+
+def move_agent(env: simpy.Environment, agent: Agent, target_x: float, target_y: float):
+    """
+    Processo SimPy que move o agente gradualmente da posição atual até ao destino.
+    A velocidade é definida por AGENT_MOVE_SPEED (pixels por minuto simulado).
+    """
+    agent.status = "moving"
+
+    dx = target_x - agent.x
+    dy = target_y - agent.y
+    distance = math.sqrt(dx ** 2 + dy ** 2)
+
+    if distance < 1:
+        yield env.timeout(0)
+        return
+
+    # Tempo de viagem em minutos simulados
+    travel_time = distance / AGENT_MOVE_SPEED
+    steps = max(1, int(travel_time * 30))   # ~30 steps por minuto simulado
+    step_time = travel_time / steps
+
+    for _ in range(steps):
+        agent.x += dx / steps
+        agent.y += dy / steps
+        yield env.timeout(step_time)
 
 
 # ─────────────────────────────────────────────
@@ -64,19 +96,15 @@ def concert_scheduler(env: simpy.Environment, stage: Stage):
     Abre o palco no início de cada show e fecha-o no fim.
     """
     for show_start in sorted(stage.shows_start):
-        # Aguardar até ao início do show
         wait = show_start - env.now
         if wait > 0:
             yield env.timeout(wait)
 
-        # Abrir palco
         stage.is_open = True
         logger.info("t=%.1f | '%s' — show iniciado!", env.now, stage.name)
 
-        # Durar o show
         yield env.timeout(stage.show_duration)
 
-        # Fechar palco
         stage.is_open = False
         logger.info("t=%.1f | '%s' — show terminado.", env.now, stage.name)
 
@@ -92,20 +120,25 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage, festival: Fe
     Processo SimPy que modela a visita de um agente a um palco.
 
     Fluxo:
-        1. Verificar se há show ativo ou próximo dentro do threshold
-        2. Esperar pelo show se necessário
-        3. Entrar na fila (request ao recurso)
-        4. Aguardar com paciência limitada (renege se demorar)
-        5. Ser processado na entrada (service time)
-        6. Assistir ao concerto (watch duration)
-        7. Sair e libertar o recurso
+        1. Mover-se visualmente até ao palco
+        2. Verificar se há show ativo ou próximo dentro do threshold
+        3. Esperar pelo show se necessário
+        4. Entrar na fila (request ao recurso)
+        5. Aguardar com paciência limitada (renege se demorar)
+        6. Ser processado na entrada (service time)
+        7. Assistir ao concerto (watch duration)
+        8. Sair e libertar o recurso
     """
-    # ── 1. Verificar estado do palco ─────────────────────────────────
+    # ── 1. Mover até ao palco ─────────────────────────────────────────
+    target_x = float(STAGES[stage.name]["x"])
+    target_y = float(STAGES[stage.name]["y"])
+    yield env.process(move_agent(env, agent, target_x, target_y))
+
+    # ── 2. Verificar estado do palco ──────────────────────────────────
     if not stage.is_open:
         next_show = stage.next_show_in()
 
         if next_show == -1 or next_show > MAX_WAIT_FOR_SHOW:
-            # Sem show próximo ou demasiado longe → tentar outro palco
             logger.debug("t=%.1f | Agent %d — '%s' fechado, sem show próximo.",
                          env.now, agent.id, stage.name)
             yield env.process(try_another_stage(env, agent, festival,
@@ -119,7 +152,7 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage, festival: Fe
                      env.now, agent.id, stage.name, next_show)
         yield env.timeout(next_show)
 
-    # ── 2. Entrar na fila ─────────────────────────────────────────────
+    # ── 3. Entrar na fila ─────────────────────────────────────────────
     arrival_time = env.now
     agent.status = "queuing"
     agent.current_stage = stage.name
@@ -140,11 +173,9 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage, festival: Fe
             logger.debug("t=%.1f | Agent %d entrou em '%s' (espera: %.1f min)",
                          env.now, agent.id, stage.name, wait_time)
 
-            # Tempo de processamento na entrada (portão)
             service_time = max(0.0, festival.rng.gauss(SERVICE_TIME_MEAN, SERVICE_TIME_STD))
             yield env.timeout(service_time)
 
-            # Assistir ao concerto
             yield env.timeout(agent.watch_duration)
 
             agent.status = "leaving"
@@ -177,9 +208,7 @@ def try_another_stage(env: simpy.Environment, agent: Agent, festival: FestivalEn
     """
     Após desistir de um palco, o agente tenta escolher outro.
     A paciência é descontada pelo tempo já gasto.
-    Se não houver alternativa, vai embora.
     """
-    # Descontar tempo já gasto da paciência
     agent.patience = max(0.0, agent.patience - time_spent)
 
     alternative = festival.choose_stage(exclude=exclude)
@@ -202,7 +231,6 @@ def agent_arrivals(env: simpy.Environment, festival: FestivalEnvironment):
     """
     Processo gerador que simula a chegada de agentes ao festival.
     As chegadas seguem uma distribuição exponencial (processo de Poisson).
-    Taxa média: AGENT_SPAWN_RATE agentes por minuto.
     """
     Agent.reset_counter()
 
