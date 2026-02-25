@@ -25,12 +25,21 @@ logger = get_logger(__name__)
 def run_simulation(festival: FestivalEnvironment, done_flag: threading.Event):
     """
     Corre a simulação SimPy numa thread separada para não bloquear o Pygame.
+    Corre passo a passo para sincronizar com a visualização.
     Quando terminar, sinaliza através do done_flag.
     """
+    import time
+
     logger.info("A iniciar simulação | Agentes: %d | Duração: %d min", NUM_AGENTS, SIM_DURATION)
     festival.setup()
     festival.env.process(agent_arrivals(festival.env, festival))
-    festival.run(duration=SIM_DURATION)
+
+    # Correr passo a passo para o Pygame conseguir capturar os agentes em movimento
+    while festival.env.peek() < SIM_DURATION:
+        festival.env.step()
+        time.sleep(0.001 / SIM_SPEED)
+
+    festival.save_metrics()
     logger.info("Simulação concluída.")
     logger.info("Resumo final: %s", festival.summary())
     done_flag.set()

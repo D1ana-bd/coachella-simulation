@@ -55,6 +55,7 @@ PATIENCE_MIN = 10               # minutos mínimos que um agente espera na fila
 PATIENCE_MAX = 40               # minutos máximos
 WATCH_DURATION_MIN = 20         # tempo mínimo que fica a ver o concerto
 WATCH_DURATION_MAX = 60         # tempo máximo
+MAX_WAIT_FOR_SHOW = 20  # minutos máximos que um agente espera pelo próximo show
 
 # ─────────────────────────────────────────────
 # MÉTRICAS & OUTPUT

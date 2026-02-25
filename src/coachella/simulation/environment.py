@@ -35,6 +35,7 @@ class Stage:
         self.shows_start = config["shows_start"]
         self.x = config["x"]
         self.y = config["y"]
+        self.is_open = False  # palco fechado até ao primeiro show
 
         # Recurso SimPy: capacidade = nº de pessoas que cabem dentro
         self.resource = simpy.Resource(env, capacity=self.capacity)
@@ -182,8 +183,10 @@ class FestivalEnvironment:
     # ── Setup & Run ───────────────────────────────────────────────────
 
     def setup(self):
-        """Regista os processos base no ambiente SimPy."""
+        from src.coachella.simulation.events import concert_scheduler
         self.env.process(self.collect_metrics())
+        for stage in self.stages.values():
+            self.env.process(concert_scheduler(self.env, stage))
         logger.info("Processos base registados.")
 
     def run(self, duration: float):
