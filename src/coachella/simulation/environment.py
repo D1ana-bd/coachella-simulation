@@ -8,7 +8,7 @@ import random
 import logging
 import csv
 import os
-from config import (
+from src.coachella.config import (
     STAGES, MAX_QUEUE_LENGTH, SERVICE_TIME_MEAN, SERVICE_TIME_STD,
     METRICS_INTERVAL, METRICS_FILE, OUTPUT_DIR
 )
