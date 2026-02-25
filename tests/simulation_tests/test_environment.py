@@ -1,7 +1,3 @@
-"""
-tests/test_environment.py - Testes unitários para FestivalEnvironment e Stage
-"""
-
 import pytest
 import simpy
 import os
@@ -198,12 +194,12 @@ def test_collect_metrics_populates_log(env):
 
 
 def test_collect_metrics_one_entry_per_stage_per_interval(env):
-    """Número de entradas = nº de palcos × nº de intervalos completos."""
+    """Número de entradas = nº de palcos × nº de snapshots (t=0 + t=10)."""
     env.setup()
     env.run(duration=METRICS_INTERVAL + 1)
-    # 1 intervalo completo → 1 snapshot por palco
     num_stages = len(STAGES)
-    assert len(env.metrics_log) == num_stages
+    # SimPy coleta no t=0 e no t=METRICS_INTERVAL → 2 snapshots × 3 palcos
+    assert len(env.metrics_log) == num_stages * 2
 
 
 def test_save_metrics_creates_csv(env, tmp_path):
