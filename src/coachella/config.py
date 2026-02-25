@@ -71,7 +71,7 @@ LOG_FILE = OUTPUT_DIR + "simulation.log"
 WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 600
 FPS = 30
-SIM_SPEED = 1.0                 # multiplicador de velocidade da simulação
+SIM_SPEED = 0.5                 # multiplicador de velocidade da simulação
 
 # Cores (RGB)
 COLORS = {
