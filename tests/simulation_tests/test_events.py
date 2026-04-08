@@ -79,10 +79,8 @@ def test_concert_scheduler_opens_for_each_show(festival):
     stage = festival.stages["Main Stage"]
 
     env.process(concert_scheduler(env, stage))
-    env.run(until=480)
+    env.run(until=481)  # 480+1 para garantir que o último evento (t=480) é executado
 
-    # Main Stage tem 4 shows — verificamos que o palco abriu e fechou
-    # O último show termina em t=420+60=480, então no fim está fechado
     assert not stage.is_open
 
 
@@ -263,7 +261,7 @@ def test_agent_reneges_when_patience_zero(festival):
     """Agente com paciência 0 num palco cheio desiste imediatamente."""
     env = festival.env
     stage = festival.stages["Outdoor Stage"]
-    stage.is_open = True  # forçar palco aberto
+    stage.is_open = True
 
     for _ in range(stage.capacity):
         blocker = create_agent(festival.rng, festival.np_rng)
@@ -271,11 +269,14 @@ def test_agent_reneges_when_patience_zero(festival):
         env.process(visit_stage(env, blocker, stage, festival))
 
     impatient = create_agent(festival.rng, festival.np_rng)
-    impatient.patience = 0
     impatient.favorite_artists = []
-    env.process(visit_stage(env, impatient, stage, festival))
 
+    # Garantir que get_patience_for devolve sempre 0
+    impatient.get_patience_for = lambda artist, np_rng: 0.0
+
+    env.process(visit_stage(env, impatient, stage, festival))
     env.run(until=5)
+
     assert stage.total_reneged >= 1
 
 
