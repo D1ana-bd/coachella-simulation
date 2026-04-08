@@ -52,23 +52,40 @@ def run_simulation(festival: FestivalEnvironment, done_flag: threading.Event):
 def draw_hud(surface: pygame.Surface, festival: FestivalEnvironment, sim_time: float, done: bool):
     """Desenha o painel de informação no canto superior esquerdo."""
     font_title = pygame.font.SysFont("monospace", 14, bold=True)
-    font_info = pygame.font.SysFont("monospace", 12)
+    font_info  = pygame.font.SysFont("monospace", 12)
+
+    # Converter minutos simulados para hora real (minuto 0 = 12:00)
+    real_hours   = int(12 + sim_time // 60)
+    real_minutes = int(sim_time % 60)
+    clock_str    = f"{real_hours:02d}:{real_minutes:02d}"
 
     lines = [
-        f"⏱  Tempo sim: {sim_time:.1f} min",
-        f"👥 Agentes ativos: {len(festival.active_agents)}",
+        f"COACHELLA SIMULATION",
+        f"Hora: {clock_str}  |  t={sim_time:.1f} min",
+        f"Agentes ativos: {len(festival.active_agents)}",
         "",
+        "── PALCOS ──────────────────",
     ]
 
     for name, stage in festival.stages.items():
-        status = "🔴 CHEIO" if stage.is_full else f"🟢 {stage.occupancy}/{stage.capacity}"
-        lines.append(f"{name}: {status} | fila: {stage.queue_length}")
+        status = "CHEIO" if stage.is_full else f"{stage.occupancy}/{stage.capacity}"
+        show_str = ""
+        from src.coachella.data.lineup import get_active_show
+        active = get_active_show(name, sim_time)
+        if active:
+            show_str = f" ♪ {active['artist']}"
+        lines.append(f"{name[:12]}: {status} | f:{stage.queue_length}{show_str}")
+
+    lines += ["", "── PERFIS ──────────────────"]
+    for profile_name, data in festival.profile_summary().items():
+        lines.append(f"{profile_name:8s}: ✓{data['served']}  ✗{data['reneged']}")
 
     if done:
-        lines += ["", "Simulação terminada!", "   Prima Q para sair."]
+        lines += ["", "✓ Simulação terminada!", "  Prima Q para sair."]
 
     # Fundo semitransparente
-    panel_w, panel_h = 280, len(lines) * 18 + 20
+    panel_w = 300
+    panel_h = len(lines) * 18 + 20
     panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
     panel.fill((0, 0, 0, 160))
     surface.blit(panel, (10, 10))
@@ -88,7 +105,7 @@ def draw_hud(surface: pygame.Surface, festival: FestivalEnvironment, sim_time: f
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("Coachella Crowd Simulation — Fase 1")
+    pygame.display.set_caption("Coachella Crowd Simulation — Fase 2")
     clock = pygame.time.Clock()
 
     # Inicializar ambiente e mapa
