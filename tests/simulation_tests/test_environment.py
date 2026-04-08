@@ -12,13 +12,11 @@ from src.coachella.config import STAGES, METRICS_INTERVAL, OUTPUT_DIR, METRICS_F
 
 @pytest.fixture
 def env():
-    """Cria um FestivalEnvironment limpo para cada teste."""
     return FestivalEnvironment(seed=42)
 
 
 @pytest.fixture
 def stage(env):
-    """Retorna o Main Stage do ambiente de teste."""
     return env.stages["Main Stage"]
 
 
@@ -27,28 +25,29 @@ def stage(env):
 # ─────────────────────────────────────────────
 
 def test_environment_creates_all_stages(env):
-    """Verifica se todos os palcos definidos no config são criados."""
     assert set(env.stages.keys()) == set(STAGES.keys())
 
 
 def test_environment_stages_are_stage_instances(env):
-    """Verifica se todos os palcos são instâncias de Stage."""
     for stage in env.stages.values():
         assert isinstance(stage, Stage)
 
 
 def test_environment_initial_metrics_empty(env):
-    """O histórico de métricas começa vazio antes de correr a simulação."""
     assert env.metrics_log == []
 
 
 def test_environment_initial_agents_empty(env):
-    """Sem agentes ativos no início."""
     assert env.active_agents == []
 
 
+def test_environment_has_np_rng(env):
+    """FestivalEnvironment tem np_rng para distribuições Normais."""
+    import numpy as np
+    assert isinstance(env.np_rng, np.random.Generator)
+
+
 def test_environment_creates_output_dir(tmp_path):
-    """Verifica se o diretório de output é criado ao inicializar."""
     fake_output = str(tmp_path / "test_data/")
     with patch("src.coachella.simulation.environment.OUTPUT_DIR", fake_output):
         with patch("src.coachella.simulation.environment.METRICS_FILE", fake_output + "metrics.csv"):
@@ -61,57 +60,70 @@ def test_environment_creates_output_dir(tmp_path):
 # ─────────────────────────────────────────────
 
 def test_stage_initial_occupancy_zero(stage):
-    """Palco começa vazio."""
     assert stage.occupancy == 0
 
 
 def test_stage_initial_queue_empty(stage):
-    """Fila começa vazia."""
     assert stage.queue_length == 0
 
 
 def test_stage_not_full_initially(stage):
-    """Palco não está cheio no início."""
     assert not stage.is_full
 
 
 def test_stage_capacity_matches_config(stage):
-    """Capacidade do palco corresponde ao config."""
     assert stage.capacity == STAGES["Main Stage"]["capacity"]
 
 
 def test_stage_popularity_matches_config(stage):
-    """Popularidade do palco corresponde ao config."""
     assert stage.popularity == STAGES["Main Stage"]["popularity"]
 
 
+def test_stage_has_no_show_duration_attr(stage):
+    """show_duration e shows_start foram removidos — vivem no lineup.py."""
+    assert not hasattr(stage, "show_duration")
+    assert not hasattr(stage, "shows_start")
+
+
 # ─────────────────────────────────────────────
-# TESTES: Stage - Shows
+# TESTES: Stage - Shows (via lineup.py)
 # ─────────────────────────────────────────────
 
 def test_stage_no_active_show_at_start(stage):
-    """No tempo 0, verifica se há show ativo (depende do config)."""
-    # Main Stage: shows_start = [60, 180, 300, 420] → t=0 não tem show
+    """Main Stage: primeiro show (Becky G) começa em t=60 → t=0 sem show."""
     assert not stage.has_active_show()
 
 
 def test_stage_active_show_during_show(stage):
-    """Durante um show, has_active_show() deve retornar True."""
-    # Forçar o tempo do ambiente para dentro de um show
-    stage.env._now = 60  # início do primeiro show do Main Stage
+    """t=65 está dentro do show Becky G (start=60, duration=60)."""
+    stage.env._now = 65
     assert stage.has_active_show()
 
 
+def test_stage_no_active_show_between_shows(stage):
+    """t=130 está entre o Becky G (60-120) e o Burna Boy (180-240)."""
+    stage.env._now = 130
+    assert not stage.has_active_show()
+
+
 def test_stage_next_show_in_returns_positive(stage):
-    """next_show_in() deve retornar valor positivo no início da simulação."""
+    """t=0: próximo show do Main Stage é Becky G em t=60 → 60 min."""
     result = stage.next_show_in()
-    assert result > 0
+    assert result == pytest.approx(60.0)
 
 
 def test_stage_next_show_in_returns_minus_one_after_last_show(stage):
     """Depois do último show, next_show_in() retorna -1."""
-    stage.env._now = 9999  # bem depois do último show
+    stage.env._now = 9999
     assert stage.next_show_in() == -1
+
+
+def test_outdoor_stage_has_active_show_at_start():
+    """Outdoor Stage: SZA começa em t=0 → show ativo imediatamente."""
+    fe = FestivalEnvironment(seed=0)
+    outdoor = fe.stages["Outdoor Stage"]
+    outdoor.env._now = 10
+    assert outdoor.has_active_show()
 
 
 # ─────────────────────────────────────────────
@@ -119,27 +131,39 @@ def test_stage_next_show_in_returns_minus_one_after_last_show(stage):
 # ─────────────────────────────────────────────
 
 def test_stage_avg_wait_time_zero_initially(stage):
-    """Média de espera é 0 quando não há registos."""
     assert stage.avg_wait_time() == 0.0
 
 
 def test_stage_record_wait_updates_avg(stage):
-    """Registar tempos de espera atualiza a média corretamente."""
     stage.record_wait(10.0)
     stage.record_wait(20.0)
     assert stage.avg_wait_time() == 15.0
 
 
 def test_stage_snapshot_has_required_keys(stage):
-    """Snapshot contém todas as chaves esperadas."""
     snap = stage.snapshot()
-    expected_keys = {"stage", "time", "occupancy", "queue_length",
-                     "total_served", "total_reneged", "avg_wait_time", "active_show"}
+    expected_keys = {
+        "stage", "time", "occupancy", "queue_length",
+        "total_served", "total_reneged", "avg_wait_time",
+        "active_show", "current_artist",
+    }
     assert expected_keys == set(snap.keys())
 
 
+def test_stage_snapshot_current_artist_none_when_no_show(stage):
+    """t=0: Main Stage sem show → current_artist é None."""
+    snap = stage.snapshot()
+    assert snap["current_artist"] is None
+
+
+def test_stage_snapshot_current_artist_during_show(stage):
+    """t=65: Becky G a tocar → current_artist é 'Becky G'."""
+    stage.env._now = 65
+    snap = stage.snapshot()
+    assert snap["current_artist"] == "Becky G"
+
+
 def test_stage_snapshot_values_match_state(stage):
-    """Valores do snapshot refletem o estado real do palco."""
     stage.record_wait(5.0)
     stage.total_served = 3
     snap = stage.snapshot()
@@ -154,32 +178,24 @@ def test_stage_snapshot_values_match_state(stage):
 # ─────────────────────────────────────────────
 
 def test_choose_stage_returns_stage_instance(env):
-    """choose_stage() retorna uma instância de Stage."""
-    result = env.choose_stage()
-    assert isinstance(result, Stage)
+    assert isinstance(env.choose_stage(), Stage)
 
 
 def test_choose_stage_excludes_specified_stages(env):
-    """choose_stage() não retorna palcos na lista de exclusão."""
     exclude = ["Main Stage", "Sahara Stage"]
     result = env.choose_stage(exclude=exclude)
     assert result.name not in exclude
 
 
 def test_choose_stage_returns_none_when_all_full(env):
-    """Se todas as filas estiverem cheias, retorna None."""
-    # Forçar fila cheia em todos os palcos mockando queue_length
     for stage in env.stages.values():
-        stage.resource.queue.extend([MagicMock()] * 51)  # > MAX_QUEUE_LENGTH
-    result = env.choose_stage()
-    assert result is None
+        stage.resource.queue.extend([MagicMock()] * 51)
+    assert env.choose_stage() is None
 
 
 def test_choose_stage_returns_none_when_all_excluded(env):
-    """Se todos os palcos forem excluídos, retorna None."""
     all_stages = list(env.stages.keys())
-    result = env.choose_stage(exclude=all_stages)
-    assert result is None
+    assert env.choose_stage(exclude=all_stages) is None
 
 
 # ─────────────────────────────────────────────
@@ -187,42 +203,36 @@ def test_choose_stage_returns_none_when_all_excluded(env):
 # ─────────────────────────────────────────────
 
 def test_collect_metrics_populates_log(env):
-    """Após correr a simulação, o metrics_log deve ter entradas."""
     env.setup()
-    env.run(duration=METRICS_INTERVAL + 1)  # um intervalo completo
+    env.run(duration=METRICS_INTERVAL + 1)
     assert len(env.metrics_log) > 0
 
 
 def test_collect_metrics_one_entry_per_stage_per_interval(env):
-    """Número de entradas = nº de palcos × nº de snapshots (t=0 + t=10)."""
+    """t=0 e t=10 → 2 snapshots × 3 palcos = 6 entradas."""
     env.setup()
     env.run(duration=METRICS_INTERVAL + 1)
-    num_stages = len(STAGES)
-    # SimPy coleta no t=0 e no t=METRICS_INTERVAL → 2 snapshots × 3 palcos
-    assert len(env.metrics_log) == num_stages * 2
+    assert len(env.metrics_log) == len(STAGES) * 2
 
 
 def test_save_metrics_creates_csv(env, tmp_path):
-    """save_metrics() cria um ficheiro CSV no caminho definido."""
     fake_file = str(tmp_path / "metrics.csv")
-    env.metrics_log = [{"stage": "Main Stage", "time": 0, "occupancy": 0,
-                        "queue_length": 0, "total_served": 0, "total_reneged": 0,
-                        "avg_wait_time": 0.0, "active_show": False}]
+    env.metrics_log = [{
+        "stage": "Main Stage", "time": 0, "occupancy": 0,
+        "queue_length": 0, "total_served": 0, "total_reneged": 0,
+        "avg_wait_time": 0.0, "active_show": False, "current_artist": None,
+    }]
     with patch("src.coachella.simulation.environment.METRICS_FILE", fake_file):
         env.save_metrics()
     assert os.path.exists(fake_file)
 
 
 def test_summary_returns_all_stages(env):
-    """summary() retorna uma entrada para cada palco."""
-    result = env.summary()
-    assert set(result.keys()) == set(STAGES.keys())
+    assert set(env.summary().keys()) == set(STAGES.keys())
 
 
 def test_summary_structure(env):
-    """summary() tem as chaves certas por palco."""
-    result = env.summary()
-    for stage_summary in result.values():
+    for stage_summary in env.summary().values():
         assert "total_served" in stage_summary
         assert "total_reneged" in stage_summary
         assert "avg_wait_time" in stage_summary

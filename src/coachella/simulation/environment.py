@@ -5,12 +5,17 @@ Gere os palcos, filas de espera, recursos e recolha de métricas.
 
 import simpy
 import random
+import numpy as np
 import logging
 import csv
 import os
 from src.coachella.config import (
     STAGES, MAX_QUEUE_LENGTH, SERVICE_TIME_MEAN, SERVICE_TIME_STD,
     METRICS_INTERVAL, METRICS_FILE, OUTPUT_DIR
+)
+
+from src.coachella.data.lineup import (
+    get_active_show, get_next_show, get_shows_at_stage
 )
 
 logger = logging.getLogger(__name__)
@@ -31,8 +36,7 @@ class Stage:
         self.name = name
         self.capacity = config["capacity"]
         self.popularity = config["popularity"]
-        self.show_duration = config["show_duration"]
-        self.shows_start = config["shows_start"]
+        # horários vêm do lineup.py — não estão no config
         self.x = config["x"]
         self.y = config["y"]
         self.is_open = False  # palco fechado até ao primeiro show
@@ -60,18 +64,11 @@ class Stage:
         return self.occupancy >= self.capacity
 
     def has_active_show(self) -> bool:
-        """Verifica se há algum concerto a decorrer no momento atual."""
-        t = self.env.now
-        for start in self.shows_start:
-            if start <= t < start + self.show_duration:
-                return True
-        return False
+        return get_active_show(self.name, self.env.now) is not None
 
     def next_show_in(self) -> float:
-        """Minutos até ao próximo show (-1 se não houver mais)."""
-        t = self.env.now
-        upcoming = [s for s in self.shows_start if s > t]
-        return min(upcoming) - t if upcoming else -1
+        show = get_next_show(self.name, self.env.now)
+        return show["start"] - self.env.now if show else -1
 
     def record_wait(self, wait: float):
         self.wait_times.append(wait)
@@ -82,7 +79,7 @@ class Stage:
         return sum(self.wait_times) / len(self.wait_times)
 
     def snapshot(self) -> dict:
-        """Retorna um dicionário com o estado atual do palco (para métricas)."""
+        active = get_active_show(self.name, self.env.now)
         return {
             "stage": self.name,
             "time": round(self.env.now, 2),
@@ -91,7 +88,8 @@ class Stage:
             "total_served": self.total_served,
             "total_reneged": self.total_reneged,
             "avg_wait_time": round(self.avg_wait_time(), 2),
-            "active_show": self.has_active_show(),
+            "active_show": active is not None,
+            "current_artist": active["artist"] if active else None,
         }
 
 
@@ -108,6 +106,7 @@ class FestivalEnvironment:
     def __init__(self, seed: int = 42):
         self.env = simpy.Environment()
         self.rng = random.Random(seed)
+        self.np_rng = np.random.default_rng(seed)
 
         # Criar palcos a partir da config
         self.stages: dict[str, Stage] = {
@@ -183,10 +182,7 @@ class FestivalEnvironment:
     # ── Setup & Run ───────────────────────────────────────────────────
 
     def setup(self):
-        from src.coachella.simulation.events import concert_scheduler
         self.env.process(self.collect_metrics())
-        for stage in self.stages.values():
-            self.env.process(concert_scheduler(self.env, stage))
         logger.info("Processos base registados.")
 
     def run(self, duration: float):

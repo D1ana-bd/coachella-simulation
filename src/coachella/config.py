@@ -19,24 +19,18 @@ STAGES = {
         "capacity": 80,
         "x": 400,
         "y": 150,
-        "show_duration": 60,        # minutos por concerto
-        "shows_start": [60, 180, 300, 420],  # minutos desde início da sim
         "popularity": 0.5,          # peso na escolha do palco
     },
     "Sahara Stage": {
         "capacity": 50,
         "x": 150,
         "y": 300,
-        "show_duration": 45,
-        "shows_start": [30, 120, 240, 360],
         "popularity": 0.3,
     },
     "Outdoor Stage": {
         "capacity": 30,
         "x": 650,
         "y": 350,
-        "show_duration": 40,
-        "shows_start": [0, 90, 210, 330, 450],
         "popularity": 0.2,
     },
 }
@@ -89,3 +83,22 @@ COLORS = {
 
 STAGE_RADIUS = 40               # raio visual do palco em px
 AGENT_RADIUS = 4                # raio visual do agente em px
+
+# ─────────────────────────────────────────────
+# PERFIS DE AGENTES
+# ─────────────────────────────────────────────
+AGENT_PROFILES = {
+    "general": {"proportion": 0.70},
+    "fan":     {"proportion": 0.20},
+    "vip":     {"proportion": 0.10},
+}
+
+# ─────────────────────────────────────────────
+# CHEGADAS (ondas temporais)
+# ─────────────────────────────────────────────
+ARRIVAL_WAVES = [
+    {"start": 0,   "end": 120, "rate": 1.0},   # abertura — fluxo tranquilo
+    {"start": 120, "end": 240, "rate": 2.5},   # aquecimento
+    {"start": 240, "end": 360, "rate": 4.0},   # pré-headliners — pico
+    {"start": 360, "end": 480, "rate": 2.0},   # headliners — já toda a gente chegou
+]
