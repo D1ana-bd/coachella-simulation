@@ -120,6 +120,10 @@ class FestivalEnvironment:
         # Agentes ativos (para visualização)
         self.active_agents: list = []
 
+        from src.coachella.simulation.agents import AgentType
+        self.reneged_by_profile: dict = {t: 0 for t in AgentType}
+        self.served_by_profile: dict = {t: 0 for t in AgentType}
+
         # Garantir que o output dir existe
         os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -177,6 +181,17 @@ class FestivalEnvironment:
                 "avg_wait_time": round(s.avg_wait_time(), 2),
             }
             for name, s in self.stages.items()
+        }
+
+    def profile_summary(self) -> dict:
+        """Resumo de desistências e servidos por perfil de agente."""
+        from src.coachella.simulation.agents import AgentType
+        return {
+            t.value: {
+                "reneged": self.reneged_by_profile[t],
+                "served": self.served_by_profile[t],
+            }
+            for t in AgentType
         }
 
     # ── Setup & Run ───────────────────────────────────────────────────

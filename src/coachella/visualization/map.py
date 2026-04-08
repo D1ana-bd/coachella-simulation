@@ -13,6 +13,7 @@ from src.coachella.config import (
     STAGES, COLORS, WINDOW_WIDTH, WINDOW_HEIGHT,
     STAGE_RADIUS, AGENT_RADIUS,
 )
+from src.coachella.data.lineup import get_active_show
 
 logger = get_logger(__name__)
 
@@ -166,19 +167,47 @@ class FestivalMap:
                 info = font_info.render(occupancy_text, True, COLORS["text"])
                 surface.blit(info, (x - info.get_width() // 2, y - info.get_height() // 2))
 
+            # Artista atual a tocar
+            if festival is not None:
+                active = get_active_show(name, festival.env.now)
+                if active:
+                    artist_label = font_info.render(
+                        f"\u266a {active['artist']}", True, (255, 215, 0)
+                    )
+                    surface.blit(artist_label, (
+                        x - artist_label.get_width() // 2,
+                        y + STAGE_RADIUS + 5
+                    ))
+
     def _draw_agents(self, surface: pygame.Surface, festival):
-        """Desenha os agentes ativos usando a posição real (x, y) do agente."""
+        """Desenha os agentes com cor por perfil e forma por status."""
+        from src.coachella.simulation.agents import AgentType
+
+        PROFILE_COLORS = {
+            AgentType.GENERAL: COLORS["agent_general"],
+            AgentType.FAN: COLORS["agent_fan"],
+            AgentType.VIP: COLORS["agent_vip"],
+        }
+
         for agent in festival.active_agents:
-            if agent.status == "moving":
-                color = (180, 180, 255)     # azul claro — em movimento
-            elif agent.status == "waiting_show":
-                color = (200, 200, 200)     # cinzento — à espera do show
-            elif agent.status == "queuing":
-                color = COLORS["queue"]     # amarelo — na fila
-            elif agent.status == "watching":
-                color = COLORS["agent"]     # verde — a ver o show
-            else:
+            if agent.status not in ("moving", "waiting_show", "queuing", "watching"):
                 continue
+
+            base_color = PROFILE_COLORS.get(agent.agent_type, COLORS["agent"])
+
+            # Status influencia o tamanho do agente
+            if agent.status == "watching":
+                radius = AGENT_RADIUS + 2  # maior — está a ver o show
+            elif agent.status == "queuing":
+                radius = AGENT_RADIUS  # normal — na fila
+            else:
+                radius = AGENT_RADIUS - 1  # mais pequeno — em movimento/espera
+
+            # Status "queuing" e "waiting_show" escurece ligeiramente a cor
+            if agent.status in ("queuing", "waiting_show"):
+                color = tuple(max(0, c - 60) for c in base_color)
+            else:
+                color = base_color
 
             ax = int(agent.x)
             ay = int(agent.y)
@@ -187,4 +216,4 @@ class FestivalMap:
                 ax += ((agent.id * 7) % (STAGE_RADIUS * 2)) - STAGE_RADIUS
                 ay += ((agent.id * 13) % (STAGE_RADIUS * 2)) - STAGE_RADIUS
 
-            draw_aacircle(surface, ax, ay, AGENT_RADIUS, color)
+            draw_aacircle(surface, ax, ay, radius, color)

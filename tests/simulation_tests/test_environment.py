@@ -236,3 +236,24 @@ def test_summary_structure(env):
         assert "total_served" in stage_summary
         assert "total_reneged" in stage_summary
         assert "avg_wait_time" in stage_summary
+
+# ─────────────────────────────────────────────
+# TESTES: Métricas por perfil
+# ─────────────────────────────────────────────
+
+def test_environment_has_reneged_by_profile(env):
+    from src.coachella.simulation.agents import AgentType
+    assert set(env.reneged_by_profile.keys()) == set(AgentType)
+    assert all(v == 0 for v in env.reneged_by_profile.values())
+
+def test_environment_has_served_by_profile(env):
+    from src.coachella.simulation.agents import AgentType
+    assert set(env.served_by_profile.keys()) == set(AgentType)
+    assert all(v == 0 for v in env.served_by_profile.values())
+
+def test_profile_summary_structure(env):
+    result = env.profile_summary()
+    assert set(result.keys()) == {"general", "fan", "vip"}
+    for v in result.values():
+        assert "reneged" in v and "served" in v
+

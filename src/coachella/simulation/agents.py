@@ -172,6 +172,7 @@ class Agent:
         self.favorites_seen: list[str] = []   # artistas favoritos que conseguiu ver
         self.stages_visited: list[str] = []   # palcos que visitou
         self.total_wait_time: float = 0.0     # tempo total em fila
+        self.reneged: bool = False  # desistiu pelo menos uma vez de uma fila
 
     def is_favorite(self, artist_name: str) -> bool:
         """Verifica se o artista é favorito deste agente."""

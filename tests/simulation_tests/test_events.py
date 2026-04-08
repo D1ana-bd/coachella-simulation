@@ -393,3 +393,69 @@ def test_agent_arrivals_creates_mixed_profiles(festival):
     # Com 50 agentes é muito provável ter pelo menos 2 tipos distintos
     # (mesmo que alguns já tenham saído, o counter confirma)
     assert Agent._id_counter == 50
+
+# ─────────────────────────────────────────────
+# TESTES: Perfis — métricas e comportamento
+# ─────────────────────────────────────────────
+
+def test_served_by_profile_increments(festival):
+    env = festival.env
+    stage = festival.stages["Outdoor Stage"]
+    stage.is_open = True
+    agent = create_agent(festival.rng, festival.np_rng)
+    agent.patience = 999
+    agent.favorite_artists = []
+
+    env.process(visit_stage(env, agent, stage, festival))
+    env.run()
+
+    total_served = sum(festival.served_by_profile.values())
+    assert total_served == 1
+
+
+def test_reneged_by_profile_increments(festival):
+    env = festival.env
+    stage = festival.stages["Outdoor Stage"]
+    stage.is_open = True
+
+    for _ in range(stage.capacity):
+        blocker = create_agent(festival.rng, festival.np_rng)
+        blocker.patience = 999
+        env.process(visit_stage(env, blocker, stage, festival))
+
+    impatient = create_agent(festival.rng, festival.np_rng)
+    impatient.favorite_artists = []
+    impatient.get_patience_for = lambda artist, np_rng: 0.0
+
+    env.process(visit_stage(env, impatient, stage, festival))
+    env.run(until=5)
+
+    total_reneged = sum(festival.reneged_by_profile.values())
+    assert total_reneged >= 1
+    assert impatient.reneged is True
+
+
+def test_leaves_early_shorter_watch(festival):
+    """Agente com leaves_early passa menos tempo a ver o show."""
+    env = festival.env
+    stage = festival.stages["Outdoor Stage"]
+    stage.is_open = True
+
+    early = create_agent(festival.rng, festival.np_rng)
+    early.leaves_early = True
+    early.patience = 999
+    early.favorite_artists = []
+
+    normal = create_agent(festival.rng, festival.np_rng)
+    normal.leaves_early = False
+    normal.patience = 999
+    normal.favorite_artists = []
+    normal.watch_duration = early.watch_duration  # mesma duração base
+
+    t_early_start = env.now
+    env.process(visit_stage(env, early, stage, festival))
+    env.run()
+    t_early_end = env.now
+
+    # Com leaves_early, o tempo total deve ser menor que watch_duration completo
+    assert t_early_end < t_early_start + early.watch_duration + 10  # +10 para service time

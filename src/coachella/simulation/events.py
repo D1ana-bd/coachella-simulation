@@ -190,7 +190,15 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage,
             service_time = max(0.0, festival.rng.gauss(SERVICE_TIME_MEAN, SERVICE_TIME_STD))
             yield env.timeout(service_time)
 
-            yield env.timeout(agent.watch_duration)
+            # Saída antecipada — agente sai mais cedo se leaves_early
+            if agent.leaves_early:
+                actual_watch = agent.watch_duration * festival.rng.uniform(0.3, 0.8)
+            else:
+                actual_watch = agent.watch_duration
+            yield env.timeout(actual_watch)
+
+            festival.served_by_profile[agent.agent_type] += 1
+
 
             # Registar artista favorito visto
             if current_artist:
@@ -208,6 +216,8 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage,
         else:
             # ── Desistiu da fila (renege) ─────────────────────────────
             stage.total_reneged += 1
+            agent.reneged = True
+            festival.reneged_by_profile[agent.agent_type] += 1
             agent.status = "leaving"
             time_spent = env.now - arrival_time
 

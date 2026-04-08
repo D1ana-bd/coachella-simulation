@@ -113,6 +113,8 @@ def test_agent_initial_position(agent):
 def test_agent_leaves_early_is_bool(agent):
     assert isinstance(agent.leaves_early, bool)
 
+def test_agent_reneged_initially_false(agent):
+    assert agent.reneged is False
 
 # ─────────────────────────────────────────────
 # LÓGICA DE FAVORITOS

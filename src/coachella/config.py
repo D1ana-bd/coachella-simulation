@@ -79,6 +79,9 @@ COLORS = {
     "queue": (255, 200, 50),
     "text": (240, 240, 240),
     "grid": (50, 50, 50),
+    "agent_general": (100, 220, 100),   # verde — geral
+    "agent_fan":     (255, 100, 180),   # rosa — fã
+    "agent_vip":     (255, 215, 0),     # dourado — VIP
 }
 
 STAGE_RADIUS = 40               # raio visual do palco em px
