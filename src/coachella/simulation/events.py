@@ -1,59 +1,21 @@
 """
 simulation/events.py - Processos de eventos dos agentes no SimPy
 Define o ciclo de vida completo de um agente: chegada → fila → palco → saída.
-Inclui o concert_scheduler que gere a abertura/fecho dos palcos por horários.
 """
 
 import simpy
-import random
 import math
 from src.coachella.utils.logger import get_logger
 from src.coachella.config import (
-    PATIENCE_MIN, PATIENCE_MAX,
-    WATCH_DURATION_MIN, WATCH_DURATION_MAX,
     SERVICE_TIME_MEAN, SERVICE_TIME_STD,
-    NUM_AGENTS, AGENT_SPAWN_RATE,
-    MAX_WAIT_FOR_SHOW, STAGES,
-    FESTIVAL_ENTRANCE, AGENT_MOVE_SPEED,
+    NUM_AGENTS, MAX_WAIT_FOR_SHOW, STAGES,
+    AGENT_MOVE_SPEED, ARRIVAL_WAVES,
 )
 from src.coachella.simulation.environment import FestivalEnvironment, Stage
+from src.coachella.simulation.agents import Agent, AgentType, create_agent
+from src.coachella.data.lineup import get_active_show, get_next_show, get_shows_at_stage
 
 logger = get_logger(__name__)
-
-
-# ─────────────────────────────────────────────
-# AGENTE
-# ─────────────────────────────────────────────
-
-class Agent:
-    """
-    Representa um festivaleiro.
-    Cada agente tem um id único, paciência, duração de visita e posição visual.
-    """
-
-    _id_counter = 0
-
-    def __init__(self, rng: random.Random):
-        Agent._id_counter += 1
-        self.id = Agent._id_counter
-        self.patience = rng.uniform(PATIENCE_MIN, PATIENCE_MAX)
-        self.watch_duration = rng.uniform(WATCH_DURATION_MIN, WATCH_DURATION_MAX)
-
-        # Estado para visualização / métricas
-        self.current_stage: str | None = None
-        self.status: str = "arriving"   # arriving | moving | waiting_show | queuing | watching | leaving
-
-        # Posição visual atual (começa na entrada do festival)
-        self.x: float = float(FESTIVAL_ENTRANCE["x"])
-        self.y: float = float(FESTIVAL_ENTRANCE["y"])
-
-    def __repr__(self):
-        return f"Agent({self.id}, status={self.status})"
-
-    @classmethod
-    def reset_counter(cls):
-        """Útil para testes — reseta o contador de IDs."""
-        cls._id_counter = 0
 
 
 # ─────────────────────────────────────────────
@@ -62,8 +24,8 @@ class Agent:
 
 def move_agent(env: simpy.Environment, agent: Agent, target_x: float, target_y: float):
     """
-    Processo SimPy que move o agente gradualmente da posição atual até ao destino.
-    A velocidade é definida por AGENT_MOVE_SPEED (pixels por minuto simulado).
+    Processo SimPy puramente visual — move o agente da posição atual ao destino.
+    Não tem impacto na lógica da simulação, só na visualização.
     """
     agent.status = "moving"
 
@@ -75,9 +37,8 @@ def move_agent(env: simpy.Environment, agent: Agent, target_x: float, target_y: 
         yield env.timeout(0)
         return
 
-    # Tempo de viagem em minutos simulados
     travel_time = distance / AGENT_MOVE_SPEED
-    steps = max(1, int(travel_time * 30))   # ~30 steps por minuto simulado
+    steps = max(1, int(travel_time * 30))
     step_time = travel_time / steps
 
     for _ in range(steps):
@@ -92,44 +53,92 @@ def move_agent(env: simpy.Environment, agent: Agent, target_x: float, target_y: 
 
 def concert_scheduler(env: simpy.Environment, stage: Stage):
     """
-    Processo SimPy que gere o ciclo de vida dos concertos num palco.
+    Gere o ciclo de vida dos concertos num palco.
     Abre o palco no início de cada show e fecha-o no fim.
+    Usa o lineup.py como fonte de verdade dos horários.
     """
-    for show_start in sorted(stage.shows_start):
-        wait = show_start - env.now
+    shows = get_shows_at_stage(stage.name)  # já ordenados por start
+
+    for show in shows:
+        wait = show["start"] - env.now
         if wait > 0:
             yield env.timeout(wait)
 
         stage.is_open = True
-        logger.info("t=%.1f | '%s' — show iniciado!", env.now, stage.name)
+        logger.info("t=%.1f | '%s' — %s iniciou!", env.now, stage.name, show["artist"])
 
-        yield env.timeout(stage.show_duration)
+        yield env.timeout(show["duration"])
 
         stage.is_open = False
-        logger.info("t=%.1f | '%s' — show terminado.", env.now, stage.name)
+        logger.info("t=%.1f | '%s' — %s terminou.", env.now, stage.name, show["artist"])
 
     logger.info("'%s' — sem mais shows.", stage.name)
+
+
+# ─────────────────────────────────────────────
+# HELPER: ESCOLHA DE PALCO INTELIGENTE
+# ─────────────────────────────────────────────
+
+def choose_stage_for_agent(agent: Agent, festival: FestivalEnvironment,
+                            exclude: list[str] = None) -> Stage | None:
+    """
+    Escolhe o palco para um agente com base nos seus artistas favoritos.
+
+    Lógica:
+    - Se houver um artista favorito a tocar agora ou em breve (< MAX_WAIT_FOR_SHOW),
+      o agente tenta ir a esse palco primeiro.
+    - Caso contrário, usa a escolha ponderada por popularidade normal.
+    """
+    exclude = exclude or []
+
+    # Verificar se algum favorito está a tocar ou vai tocar em breve
+    for artist in agent.favorite_artists:
+        show = get_next_show_or_active(artist, festival.env.now)
+        if show is None:
+            continue
+        stage_name = show["stage"]
+        if stage_name in exclude:
+            continue
+        stage = festival.stages.get(stage_name)
+        if stage is None or stage.queue_length >= 50:
+            continue
+
+        # Show ativo ou a começar dentro do threshold de espera
+        time_until = max(0.0, show["start"] - festival.env.now)
+        if time_until <= MAX_WAIT_FOR_SHOW:
+            logger.debug("t=%.1f | Agent %d → favorito '%s' em '%s' (em %.1f min)",
+                         festival.env.now, agent.id, artist, stage_name, time_until)
+            return stage
+
+    # Fallback: escolha ponderada por popularidade
+    return festival.choose_stage(exclude=exclude)
+
+
+def get_next_show_or_active(artist: str, current_time: float) -> dict | None:
+    """
+    Retorna o show de um artista se estiver ativo agora ou ainda por começar.
+    """
+    from src.coachella.data.lineup import get_show
+    show = get_show(artist)
+    if show is None:
+        return None
+    end_time = show["start"] + show["duration"]
+    if current_time <= end_time:
+        return show
+    return None
 
 
 # ─────────────────────────────────────────────
 # PROCESSO: VISITA AO PALCO
 # ─────────────────────────────────────────────
 
-def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage, festival: FestivalEnvironment):
+def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage,
+                festival: FestivalEnvironment):
     """
-    Processo SimPy que modela a visita de um agente a um palco.
-
-    Fluxo:
-        1. Mover-se visualmente até ao palco
-        2. Verificar se há show ativo ou próximo dentro do threshold
-        3. Esperar pelo show se necessário
-        4. Entrar na fila (request ao recurso)
-        5. Aguardar com paciência limitada (renege se demorar)
-        6. Ser processado na entrada (service time)
-        7. Assistir ao concerto (watch duration)
-        8. Sair e libertar o recurso
+    Ciclo de vida completo de um agente num palco:
+    mover → verificar show → fila (com renege) → assistir → sair.
     """
-    # ── 1. Mover até ao palco ─────────────────────────────────────────
+    # ── 1. Mover até ao palco (visual) ───────────────────────────────
     target_x = float(STAGES[stage.name]["x"])
     target_y = float(STAGES[stage.name]["y"])
     yield env.process(move_agent(env, agent, target_x, target_y))
@@ -145,20 +154,24 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage, festival: Fe
                                                 exclude=[stage.name], time_spent=0.0))
             return
 
-        # Esperar pelo próximo show
         agent.status = "waiting_show"
         agent.current_stage = stage.name
         logger.debug("t=%.1f | Agent %d — aguarda show em '%s' (%.1f min).",
                      env.now, agent.id, stage.name, next_show)
         yield env.timeout(next_show)
 
-    # ── 3. Entrar na fila ─────────────────────────────────────────────
+    # ── 3. Determinar paciência para este palco ───────────────────────
+    active = get_active_show(stage.name, env.now)
+    current_artist = active["artist"] if active else None
+    agent.patience = agent.get_patience_for(current_artist, festival.np_rng)
+
+    # ── 4. Entrar na fila ─────────────────────────────────────────────
     arrival_time = env.now
     agent.status = "queuing"
     agent.current_stage = stage.name
 
-    logger.debug("t=%.1f | Agent %d → fila '%s' (paciência: %.1f min)",
-                 env.now, agent.id, stage.name, agent.patience)
+    logger.debug("t=%.1f | Agent %d [%s] → fila '%s' (paciência: %.1f min)",
+                 env.now, agent.id, agent.agent_type.value, stage.name, agent.patience)
 
     with stage.resource.request() as request:
         result = yield request | env.timeout(agent.patience)
@@ -168,6 +181,7 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage, festival: Fe
             wait_time = env.now - arrival_time
             stage.record_wait(wait_time)
             stage.total_served += 1
+            agent.total_wait_time += wait_time
             agent.status = "watching"
 
             logger.debug("t=%.1f | Agent %d entrou em '%s' (espera: %.1f min)",
@@ -178,6 +192,16 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage, festival: Fe
 
             yield env.timeout(agent.watch_duration)
 
+            # Registar artista favorito visto
+            if current_artist:
+                agent.record_favorite_seen(current_artist)
+                if agent.is_favorite(current_artist):
+                    logger.debug("t=%.1f | Agent %d [%s] viu favorito '%s'! 🎵",
+                                 env.now, agent.id, agent.agent_type.value, current_artist)
+
+            if stage.name not in agent.stages_visited:
+                agent.stages_visited.append(stage.name)
+
             agent.status = "leaving"
             logger.debug("t=%.1f | Agent %d saiu de '%s'", env.now, agent.id, stage.name)
 
@@ -187,14 +211,13 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage, festival: Fe
             agent.status = "leaving"
             time_spent = env.now - arrival_time
 
-            logger.debug("t=%.1f | Agent %d desistiu da fila '%s' após %.1f min",
-                         env.now, agent.id, stage.name, agent.patience)
+            logger.debug("t=%.1f | Agent %d [%s] desistiu da fila '%s' após %.1f min",
+                         env.now, agent.id, agent.agent_type.value, stage.name, time_spent)
 
             yield env.process(try_another_stage(env, agent, festival,
                                                 exclude=[stage.name],
                                                 time_spent=time_spent))
 
-    # Remover da lista de agentes ativos
     if agent in festival.active_agents:
         festival.active_agents.remove(agent)
 
@@ -211,7 +234,7 @@ def try_another_stage(env: simpy.Environment, agent: Agent, festival: FestivalEn
     """
     agent.patience = max(0.0, agent.patience - time_spent)
 
-    alternative = festival.choose_stage(exclude=exclude)
+    alternative = choose_stage_for_agent(agent, festival, exclude=exclude)
 
     if alternative is not None:
         logger.debug("t=%.1f | Agent %d tenta alternativa: '%s'",
@@ -224,29 +247,51 @@ def try_another_stage(env: simpy.Environment, agent: Agent, festival: FestivalEn
 
 
 # ─────────────────────────────────────────────
-# PROCESSO: CHEGADA DE AGENTES
+# PROCESSO: CHEGADA DE AGENTES (ondas temporais)
 # ─────────────────────────────────────────────
 
 def agent_arrivals(env: simpy.Environment, festival: FestivalEnvironment):
     """
-    Processo gerador que simula a chegada de agentes ao festival.
-    As chegadas seguem uma distribuição exponencial (processo de Poisson).
+    Simula a chegada de agentes ao festival em ondas temporais.
+
+    Em vez de uma taxa constante, usa ARRIVAL_WAVES para modelar:
+    - Abertura tranquila
+    - Aquecimento a meio do dia
+    - Pico pré-headliners
+    - Abrandamento durante os headliners
+
+    Cada onda tem uma taxa Poisson própria (expovariate).
+    O número total de agentes é distribuído proporcionalmente pela duração de cada onda.
     """
     Agent.reset_counter()
 
-    for _ in range(NUM_AGENTS):
-        interarrival = festival.rng.expovariate(AGENT_SPAWN_RATE)
-        yield env.timeout(interarrival)
+    # Calcular duração total das ondas para distribuir os agentes
+    total_duration = sum(w["end"] - w["start"] for w in ARRIVAL_WAVES)
+    agents_spawned = 0
 
-        agent = Agent(festival.rng)
-        festival.active_agents.append(agent)
+    for wave in ARRIVAL_WAVES:
+        wave_duration = wave["end"] - wave["start"]
+        wave_agents = round(NUM_AGENTS * (wave_duration / total_duration))
+        rate = wave["rate"]
 
-        stage = festival.choose_stage()
+        for _ in range(wave_agents):
+            if agents_spawned >= NUM_AGENTS:
+                return
 
-        if stage is not None:
-            logger.debug("t=%.1f | Agent %d chegou → '%s'", env.now, agent.id, stage.name)
-            env.process(visit_stage(env, agent, stage, festival))
-        else:
-            agent.status = "leaving"
-            festival.active_agents.remove(agent)
-            logger.debug("t=%.1f | Agent %d foi embora (festival cheio)", env.now, agent.id)
+            interarrival = festival.rng.expovariate(rate)
+            yield env.timeout(interarrival)
+
+            agent = create_agent(festival.rng, festival.np_rng)
+            festival.active_agents.append(agent)
+            agents_spawned += 1
+
+            stage = choose_stage_for_agent(agent, festival)
+
+            if stage is not None:
+                logger.debug("t=%.1f | Agent %d [%s] chegou → '%s'",
+                             env.now, agent.id, agent.agent_type.value, stage.name)
+                env.process(visit_stage(env, agent, stage, festival))
+            else:
+                agent.status = "leaving"
+                festival.active_agents.remove(agent)
+                logger.debug("t=%.1f | Agent %d foi embora (festival cheio)", env.now, agent.id)
