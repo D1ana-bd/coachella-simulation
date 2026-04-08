@@ -265,25 +265,29 @@ def agent_arrivals(env: simpy.Environment, festival: FestivalEnvironment):
     """
     Agent.reset_counter()
 
-    # Calcular duração total das ondas para distribuir os agentes
     total_duration = sum(w["end"] - w["start"] for w in ARRIVAL_WAVES)
-    agents_spawned = 0
 
-    for wave in ARRIVAL_WAVES:
-        wave_duration = wave["end"] - wave["start"]
-        wave_agents = round(NUM_AGENTS * (wave_duration / total_duration))
+    # Distribuir agentes pelas ondas sem perder nenhum por arredondamento
+    wave_counts = []
+    remaining = NUM_AGENTS
+    for i, wave in enumerate(ARRIVAL_WAVES):
+        if i == len(ARRIVAL_WAVES) - 1:
+            wave_counts.append(remaining)
+        else:
+            wave_duration = wave["end"] - wave["start"]
+            count = round(NUM_AGENTS * (wave_duration / total_duration))
+            wave_counts.append(count)
+            remaining -= count
+
+    for wave, wave_agents in zip(ARRIVAL_WAVES, wave_counts):
         rate = wave["rate"]
 
         for _ in range(wave_agents):
-            if agents_spawned >= NUM_AGENTS:
-                return
-
             interarrival = festival.rng.expovariate(rate)
             yield env.timeout(interarrival)
 
             agent = create_agent(festival.rng, festival.np_rng)
             festival.active_agents.append(agent)
-            agents_spawned += 1
 
             stage = choose_stage_for_agent(agent, festival)
 
