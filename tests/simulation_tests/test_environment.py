@@ -1,8 +1,13 @@
+"""
+tests/simulation_tests/test_environment.py
+"""
+
 import pytest
 import simpy
 import os
 from unittest.mock import patch, MagicMock
 from src.coachella.simulation.environment import FestivalEnvironment, Stage
+from src.coachella.simulation.policies import BASELINE, INFORMATIVE_APP, ACTIVE_MANAGEMENT, VIP_PRIORITY
 from src.coachella.config import STAGES, METRICS_INTERVAL, OUTPUT_DIR, METRICS_FILE
 
 
@@ -42,7 +47,6 @@ def test_environment_initial_agents_empty(env):
 
 
 def test_environment_has_np_rng(env):
-    """FestivalEnvironment tem np_rng para distribuições Normais."""
     import numpy as np
     assert isinstance(env.np_rng, np.random.Generator)
 
@@ -53,6 +57,110 @@ def test_environment_creates_output_dir(tmp_path):
         with patch("src.coachella.simulation.environment.METRICS_FILE", fake_output + "metrics.csv"):
             fe = FestivalEnvironment()
     assert os.path.exists(fake_output)
+
+
+# ─────────────────────────────────────────────
+# TESTES: FestivalEnvironment - PolicyConfig
+# ─────────────────────────────────────────────
+
+def test_environment_default_policy_is_baseline():
+    """Sem policy explícita, o ambiente usa BASELINE."""
+    fe = FestivalEnvironment(seed=42)
+    assert fe.policy.name == "Baseline"
+
+
+def test_environment_accepts_policy():
+    """FestivalEnvironment aceita PolicyConfig e guarda-a."""
+    fe = FestivalEnvironment(seed=42, policy=INFORMATIVE_APP)
+    assert fe.policy.name == "Informative App"
+
+
+def test_environment_accepts_active_management_policy():
+    fe = FestivalEnvironment(seed=42, policy=ACTIVE_MANAGEMENT)
+    assert fe.policy.name == "Active Management"
+
+
+def test_environment_accepts_vip_policy():
+    fe = FestivalEnvironment(seed=42, policy=VIP_PRIORITY)
+    assert fe.policy.name == "VIP Priority"
+
+
+# ─────────────────────────────────────────────
+# TESTES: Stage - Resource vs PriorityResource
+# ─────────────────────────────────────────────
+
+def test_stage_uses_resource_with_baseline():
+    """Baseline → simpy.Resource normal."""
+    fe = FestivalEnvironment(seed=42, policy=BASELINE)
+    for stage in fe.stages.values():
+        assert isinstance(stage.resource, simpy.Resource)
+        assert not isinstance(stage.resource, simpy.PriorityResource)
+
+
+def test_stage_uses_priority_resource_with_vip_policy():
+    """VIP Priority → simpy.PriorityResource em todos os palcos."""
+    fe = FestivalEnvironment(seed=42, policy=VIP_PRIORITY)
+    for stage in fe.stages.values():
+        assert isinstance(stage.resource, simpy.PriorityResource)
+
+
+def test_stage_uses_resource_with_informative_app():
+    """App informativa não altera o tipo de recurso."""
+    fe = FestivalEnvironment(seed=42, policy=INFORMATIVE_APP)
+    for stage in fe.stages.values():
+        assert isinstance(stage.resource, simpy.Resource)
+        assert not isinstance(stage.resource, simpy.PriorityResource)
+
+
+def test_stage_uses_resource_with_active_management():
+    """Gestão ativa não altera o tipo de recurso."""
+    fe = FestivalEnvironment(seed=42, policy=ACTIVE_MANAGEMENT)
+    for stage in fe.stages.values():
+        assert isinstance(stage.resource, simpy.Resource)
+        assert not isinstance(stage.resource, simpy.PriorityResource)
+
+
+# ─────────────────────────────────────────────
+# TESTES: get_stage_info_for_agent()
+# ─────────────────────────────────────────────
+
+def test_get_stage_info_returns_required_keys(env):
+    info = env.get_stage_info_for_agent("Main Stage")
+    assert {"occupancy", "queue_length", "capacity", "is_congested"} == set(info.keys())
+
+
+def test_get_stage_info_occupancy_initially_zero(env):
+    info = env.get_stage_info_for_agent("Main Stage")
+    assert info["occupancy"] == 0
+
+
+def test_get_stage_info_capacity_matches_config(env):
+    info = env.get_stage_info_for_agent("Main Stage")
+    assert info["capacity"] == STAGES["Main Stage"]["capacity"]
+
+
+def test_get_stage_info_not_congested_when_empty(env):
+    """Palco vazio não está congestionado."""
+    info = env.get_stage_info_for_agent("Main Stage")
+    assert info["is_congested"] is False
+
+
+def test_get_stage_info_congested_when_above_threshold():
+    """Palco com 90% de ocupação está congestionado (threshold=0.85)."""
+    fe = FestivalEnvironment(seed=42, policy=ACTIVE_MANAGEMENT)
+    stage = fe.stages["Main Stage"]
+    # Mockar occupancy diretamente — evita manipular internos do SimPy
+    from unittest.mock import PropertyMock
+    with patch.object(type(stage), "occupancy", new_callable=PropertyMock, return_value=73):
+        info = fe.get_stage_info_for_agent("Main Stage")
+        assert info["is_congested"] is True
+
+
+def test_get_stage_info_not_congested_baseline():
+    """Baseline também tem o helper — útil para comparação uniforme."""
+    fe = FestivalEnvironment(seed=42, policy=BASELINE)
+    info = fe.get_stage_info_for_agent("Sahara Stage")
+    assert "is_congested" in info
 
 
 # ─────────────────────────────────────────────
@@ -80,7 +188,6 @@ def test_stage_popularity_matches_config(stage):
 
 
 def test_stage_has_no_show_duration_attr(stage):
-    """show_duration e shows_start foram removidos — vivem no lineup.py."""
     assert not hasattr(stage, "show_duration")
     assert not hasattr(stage, "shows_start")
 
@@ -90,36 +197,30 @@ def test_stage_has_no_show_duration_attr(stage):
 # ─────────────────────────────────────────────
 
 def test_stage_no_active_show_at_start(stage):
-    """Main Stage: primeiro show (Becky G) começa em t=60 → t=0 sem show."""
     assert not stage.has_active_show()
 
 
 def test_stage_active_show_during_show(stage):
-    """t=65 está dentro do show Becky G (start=60, duration=60)."""
     stage.env._now = 65
     assert stage.has_active_show()
 
 
 def test_stage_no_active_show_between_shows(stage):
-    """t=130 está entre o Becky G (60-120) e o Burna Boy (180-240)."""
     stage.env._now = 130
     assert not stage.has_active_show()
 
 
 def test_stage_next_show_in_returns_positive(stage):
-    """t=0: próximo show do Main Stage é Becky G em t=60 → 60 min."""
     result = stage.next_show_in()
     assert result == pytest.approx(60.0)
 
 
 def test_stage_next_show_in_returns_minus_one_after_last_show(stage):
-    """Depois do último show, next_show_in() retorna -1."""
     stage.env._now = 9999
     assert stage.next_show_in() == -1
 
 
 def test_outdoor_stage_has_active_show_at_start():
-    """Outdoor Stage: SZA começa em t=0 → show ativo imediatamente."""
     fe = FestivalEnvironment(seed=0)
     outdoor = fe.stages["Outdoor Stage"]
     outdoor.env._now = 10
@@ -151,13 +252,11 @@ def test_stage_snapshot_has_required_keys(stage):
 
 
 def test_stage_snapshot_current_artist_none_when_no_show(stage):
-    """t=0: Main Stage sem show → current_artist é None."""
     snap = stage.snapshot()
     assert snap["current_artist"] is None
 
 
 def test_stage_snapshot_current_artist_during_show(stage):
-    """t=65: Becky G a tocar → current_artist é 'Becky G'."""
     stage.env._now = 65
     snap = stage.snapshot()
     assert snap["current_artist"] == "Becky G"
@@ -209,7 +308,6 @@ def test_collect_metrics_populates_log(env):
 
 
 def test_collect_metrics_one_entry_per_stage_per_interval(env):
-    """t=0 e t=10 → 2 snapshots × 3 palcos = 6 entradas."""
     env.setup()
     env.run(duration=METRICS_INTERVAL + 1)
     assert len(env.metrics_log) == len(STAGES) * 2
@@ -237,6 +335,7 @@ def test_summary_structure(env):
         assert "total_reneged" in stage_summary
         assert "avg_wait_time" in stage_summary
 
+
 # ─────────────────────────────────────────────
 # TESTES: Métricas por perfil
 # ─────────────────────────────────────────────
@@ -246,10 +345,12 @@ def test_environment_has_reneged_by_profile(env):
     assert set(env.reneged_by_profile.keys()) == set(AgentType)
     assert all(v == 0 for v in env.reneged_by_profile.values())
 
+
 def test_environment_has_served_by_profile(env):
     from src.coachella.simulation.agents import AgentType
     assert set(env.served_by_profile.keys()) == set(AgentType)
     assert all(v == 0 for v in env.served_by_profile.values())
+
 
 def test_profile_summary_structure(env):
     result = env.profile_summary()

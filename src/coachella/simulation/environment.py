@@ -18,6 +18,7 @@ from src.coachella.data.lineup import (
     get_active_show, get_next_show, get_shows_at_stage
 )
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +32,7 @@ class Stage:
     Usa simpy.Resource para controlar capacidade e fila de entrada.
     """
 
-    def __init__(self, env: simpy.Environment, name: str, config: dict):
+    def __init__(self, env: simpy.Environment, name: str, config: dict, policy=None):
         self.env = env
         self.name = name
         self.capacity = config["capacity"]
@@ -41,8 +42,11 @@ class Stage:
         self.y = config["y"]
         self.is_open = False  # palco fechado até ao primeiro show
 
-        # Recurso SimPy: capacidade = nº de pessoas que cabem dentro
-        self.resource = simpy.Resource(env, capacity=self.capacity)
+        # Recurso SimPy: PriorityResource se política VIP, Resource normal caso contrário
+        if policy is not None and policy.vip_priority:
+            self.resource = simpy.PriorityResource(env, capacity=self.capacity)
+        else:
+            self.resource = simpy.Resource(env, capacity=self.capacity)
 
         # Métricas internas
         self.total_served = 0
@@ -103,14 +107,16 @@ class FestivalEnvironment:
     Inicializa o SimPy, cria os palcos e gere a recolha de métricas.
     """
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, policy=None):
         self.env = simpy.Environment()
         self.rng = random.Random(seed)
         self.np_rng = np.random.default_rng(seed)
 
-        # Criar palcos a partir da config
+        from src.coachella.simulation.policies import BASELINE
+        self.policy = policy or BASELINE
+
         self.stages: dict[str, Stage] = {
-            name: Stage(self.env, name, cfg)
+            name: Stage(self.env, name, cfg, policy=self.policy)
             for name, cfg in STAGES.items()
         }
 
@@ -146,6 +152,19 @@ class FestivalEnvironment:
 
         weights = [s.popularity for s in candidates]
         return self.rng.choices(candidates, weights=weights, k=1)[0]
+
+    def get_stage_info_for_agent(self, stage_name: str) -> dict:
+        """
+        Retorna informação sobre um palco para um agente com app.
+        Simula o lag da informação — a lotação vista tem info_delay minutos de atraso.
+        """
+        stage = self.stages[stage_name]
+        return {
+            "occupancy": stage.occupancy,
+            "queue_length": stage.queue_length,
+            "capacity": stage.capacity,
+            "is_congested": self.policy.is_congested(stage.occupancy, stage.capacity),
+        }
 
     # ── Métricas ──────────────────────────────────────────────────────
 

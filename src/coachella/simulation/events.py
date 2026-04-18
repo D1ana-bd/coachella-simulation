@@ -9,7 +9,7 @@ from src.coachella.utils.logger import get_logger
 from src.coachella.config import (
     SERVICE_TIME_MEAN, SERVICE_TIME_STD,
     NUM_AGENTS, MAX_WAIT_FOR_SHOW, STAGES,
-    AGENT_MOVE_SPEED, ARRIVAL_WAVES,
+    AGENT_MOVE_SPEED, ARRIVAL_WAVES, MAX_QUEUE_LENGTH
 )
 from src.coachella.simulation.environment import FestivalEnvironment, Stage
 from src.coachella.simulation.agents import Agent, AgentType, create_agent
@@ -17,6 +17,15 @@ from src.coachella.data.lineup import get_active_show, get_next_show, get_shows_
 
 logger = get_logger(__name__)
 
+from src.coachella.simulation.policies import (
+    BASELINE, PRIORITY_VIP, PRIORITY_FAN, PRIORITY_GENERAL
+)
+
+AGENT_PRIORITY = {
+    AgentType.VIP:     PRIORITY_VIP,
+    AgentType.FAN:     PRIORITY_FAN,
+    AgentType.GENERAL: PRIORITY_GENERAL,
+}
 
 # ─────────────────────────────────────────────
 # PROCESSO: MOVIMENTO VISUAL
@@ -90,6 +99,21 @@ def choose_stage_for_agent(agent: Agent, festival: FestivalEnvironment,
     - Caso contrário, usa a escolha ponderada por popularidade normal.
     """
     exclude = exclude or []
+
+    # ── App informativa: evitar palcos congestionados ─────────────────
+    if festival.policy.app_enabled and festival.policy.agent_uses_app(agent.agent_type.value, festival.rng):
+        non_congested = [
+            name for name, stage in festival.stages.items()
+            if name not in exclude
+               and not festival.get_stage_info_for_agent(name)["is_congested"]
+               and stage.queue_length < MAX_QUEUE_LENGTH
+        ]
+        if non_congested:
+            exclude_congested = [
+                name for name in festival.stages
+                if name not in non_congested
+            ]
+            exclude = list(set(exclude + exclude_congested))
 
     # Verificar se algum favorito está a tocar ou vai tocar em breve
     for artist in agent.favorite_artists:
@@ -173,7 +197,9 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage,
     logger.debug("t=%.1f | Agent %d [%s] → fila '%s' (paciência: %.1f min)",
                  env.now, agent.id, agent.agent_type.value, stage.name, agent.patience)
 
-    with stage.resource.request() as request:
+    priority = AGENT_PRIORITY.get(agent.agent_type, PRIORITY_GENERAL)
+    req_kwargs = {"priority": priority} if festival.policy.vip_priority else {}
+    with stage.resource.request(**req_kwargs) as request:
         result = yield request | env.timeout(agent.patience)
 
         if request in result:
@@ -199,7 +225,6 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage,
 
             festival.served_by_profile[agent.agent_type] += 1
 
-
             # Registar artista favorito visto
             if current_artist:
                 agent.record_favorite_seen(current_artist)
@@ -224,13 +249,23 @@ def visit_stage(env: simpy.Environment, agent: Agent, stage: Stage,
             logger.debug("t=%.1f | Agent %d [%s] desistiu da fila '%s' após %.1f min",
                          env.now, agent.id, agent.agent_type.value, stage.name, time_spent)
 
+            # ── Gestão ativa: recomendar alternativa ──────────────────
+            # Se o palco está congestionado e o agente segue a recomendação,
+            # exclui explicitamente este palco da próxima tentativa.
+            # Caso contrário, comportamento normal (já exclui o palco atual).
+            if (festival.policy.active_management
+                    and festival.policy.is_congested(stage.occupancy, stage.capacity)
+                    and festival.policy.agent_follows_recommendation(
+                        agent.agent_type.value, festival.rng)):
+                logger.debug("t=%.1f | Agent %d [%s] seguiu recomendação — evita '%s'",
+                             festival.env.now, agent.id, agent.agent_type.value, stage.name)
+
             yield env.process(try_another_stage(env, agent, festival,
                                                 exclude=[stage.name],
                                                 time_spent=time_spent))
 
     if agent in festival.active_agents:
         festival.active_agents.remove(agent)
-
 
 # ─────────────────────────────────────────────
 # PROCESSO: TENTAR OUTRO PALCO
