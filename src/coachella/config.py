@@ -10,6 +10,7 @@ RANDOM_SEED = 42
 SIM_DURATION = 480          # minutos (ex: 8h de festival, 12:00 → 20:00)
 NUM_AGENTS = 200            # agentes na fase 1 (escalar depois)
 AGENT_SPAWN_RATE = 2.0      # média de chegadas por minuto (distribuição Poisson)
+NUM_REPLICAS = 30       # réplicas por política (garante normalidade assintótica — TLC)
 
 # ─────────────────────────────────────────────
 # PALCOS (stages)
