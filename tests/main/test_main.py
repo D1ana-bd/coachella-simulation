@@ -39,41 +39,44 @@ def surface():
 # ─────────────────────────────────────────────
 
 def test_run_simulation_sets_done_flag(festival, done_flag):
-    """Após correr, done_flag deve estar set."""
-    with patch("main.NUM_AGENTS", 5):
-        with patch("main.SIM_DURATION", 60):
-            run_simulation(festival, done_flag)
+    with patch("main.NUM_AGENTS", 5), \
+         patch("main.SIM_DURATION", 60), \
+         patch("time.sleep"):
+        run_simulation(festival, done_flag)
     assert done_flag.is_set()
 
 
 def test_run_simulation_produces_metrics(festival, done_flag):
     """Após a simulação, deve haver métricas recolhidas."""
-    with patch("main.NUM_AGENTS", 5):
-        with patch("main.SIM_DURATION", 60):
-            run_simulation(festival, done_flag)
+    with patch("main.NUM_AGENTS", 5), \
+         patch("main.SIM_DURATION", 60), \
+         patch("time.sleep"):
+        run_simulation(festival, done_flag)
     assert len(festival.metrics_log) > 0
 
 
 def test_run_simulation_serves_agents(festival, done_flag):
     """Pelo menos alguns agentes devem ser servidos."""
-    with patch("main.NUM_AGENTS", 10):
-        with patch("main.SIM_DURATION", 300):
-            run_simulation(festival, done_flag)
+    with patch("main.NUM_AGENTS", 10), \
+         patch("main.SIM_DURATION", 300), \
+         patch("time.sleep"):
+        run_simulation(festival, done_flag)
     total_served = sum(s.total_served for s in festival.stages.values())
     assert total_served > 0
 
 
 def test_run_simulation_in_thread(festival, done_flag):
     """run_simulation deve funcionar corretamente numa thread separada."""
-    with patch("main.NUM_AGENTS", 5):
-        with patch("main.SIM_DURATION", 60):
-            thread = threading.Thread(
-                target=run_simulation,
-                args=(festival, done_flag),
-                daemon=True,
-            )
-            thread.start()
-            thread.join(timeout=10)
+    with patch("main.NUM_AGENTS", 5), \
+         patch("main.SIM_DURATION", 60), \
+         patch("time.sleep"):
+        thread = threading.Thread(
+            target=run_simulation,
+            args=(festival, done_flag),
+            daemon=True,
+        )
+        thread.start()
+        thread.join(timeout=10)
 
     assert done_flag.is_set()
     assert not thread.is_alive()
@@ -82,10 +85,11 @@ def test_run_simulation_in_thread(festival, done_flag):
 def test_run_simulation_creates_csv(festival, done_flag, tmp_path):
     """Após a simulação, o ficheiro de métricas deve ser criado."""
     fake_file = str(tmp_path / "metrics.csv")
-    with patch("main.NUM_AGENTS", 5):
-        with patch("main.SIM_DURATION", 60):
-            with patch("src.coachella.simulation.environment.METRICS_FILE", fake_file):
-                run_simulation(festival, done_flag)
+    with patch("main.NUM_AGENTS", 5), \
+         patch("main.SIM_DURATION", 60), \
+         patch("time.sleep"), \
+         patch("src.coachella.simulation.environment.METRICS_FILE", fake_file):
+        run_simulation(festival, done_flag)
     import os
     assert os.path.exists(fake_file)
 
@@ -163,6 +167,7 @@ def test_main_exits_on_quit_event():
          patch("main.pygame.mouse.get_pos", return_value=(0, 0)), \
          patch("main.pygame.event.get", return_value=[quit_event]), \
          patch("main.pygame.font.SysFont", return_value=MagicMock()), \
+         patch("main.draw_menu"), \
          patch("main.sys.exit") as mock_exit:
 
         from main import main
@@ -186,6 +191,7 @@ def test_main_exits_on_q_keydown_in_menu():
          patch("main.pygame.mouse.get_pos", return_value=(0, 0)), \
          patch("main.pygame.event.get", return_value=[q_event]), \
          patch("main.pygame.font.SysFont", return_value=MagicMock()), \
+         patch("main.draw_menu"), \
          patch("main.sys.exit") as mock_exit:
 
         from main import main
@@ -196,7 +202,6 @@ def test_main_exits_on_q_keydown_in_menu():
 
 def test_main_starts_simulation_thread():
     """main() deve lançar a thread de simulação após escolha no menu."""
-    # Simula: menu com ENTER para selecionar, depois QUIT na simulação
     enter_event = MagicMock()
     enter_event.type = pygame.KEYDOWN
     enter_event.key = pygame.K_RETURN
