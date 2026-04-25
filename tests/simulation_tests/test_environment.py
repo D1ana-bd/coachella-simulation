@@ -22,7 +22,7 @@ def env():
 
 @pytest.fixture
 def stage(env):
-    return env.stages["Main Stage"]
+    return env.stages["Coachella Stage"]
 
 
 # ─────────────────────────────────────────────
@@ -64,13 +64,11 @@ def test_environment_creates_output_dir(tmp_path):
 # ─────────────────────────────────────────────
 
 def test_environment_default_policy_is_baseline():
-    """Sem policy explícita, o ambiente usa BASELINE."""
     fe = FestivalEnvironment(seed=42)
     assert fe.policy.name == "Baseline"
 
 
 def test_environment_accepts_policy():
-    """FestivalEnvironment aceita PolicyConfig e guarda-a."""
     fe = FestivalEnvironment(seed=42, policy=INFORMATIVE_APP)
     assert fe.policy.name == "Informative App"
 
@@ -90,7 +88,6 @@ def test_environment_accepts_vip_policy():
 # ─────────────────────────────────────────────
 
 def test_stage_uses_resource_with_baseline():
-    """Baseline → simpy.Resource normal."""
     fe = FestivalEnvironment(seed=42, policy=BASELINE)
     for stage in fe.stages.values():
         assert isinstance(stage.resource, simpy.Resource)
@@ -98,14 +95,12 @@ def test_stage_uses_resource_with_baseline():
 
 
 def test_stage_uses_priority_resource_with_vip_policy():
-    """VIP Priority → simpy.PriorityResource em todos os palcos."""
     fe = FestivalEnvironment(seed=42, policy=VIP_PRIORITY)
     for stage in fe.stages.values():
         assert isinstance(stage.resource, simpy.PriorityResource)
 
 
 def test_stage_uses_resource_with_informative_app():
-    """App informativa não altera o tipo de recurso."""
     fe = FestivalEnvironment(seed=42, policy=INFORMATIVE_APP)
     for stage in fe.stages.values():
         assert isinstance(stage.resource, simpy.Resource)
@@ -113,7 +108,6 @@ def test_stage_uses_resource_with_informative_app():
 
 
 def test_stage_uses_resource_with_active_management():
-    """Gestão ativa não altera o tipo de recurso."""
     fe = FestivalEnvironment(seed=42, policy=ACTIVE_MANAGEMENT)
     for stage in fe.stages.values():
         assert isinstance(stage.resource, simpy.Resource)
@@ -125,41 +119,39 @@ def test_stage_uses_resource_with_active_management():
 # ─────────────────────────────────────────────
 
 def test_get_stage_info_returns_required_keys(env):
-    info = env.get_stage_info_for_agent("Main Stage")
+    info = env.get_stage_info_for_agent("Coachella Stage")
     assert {"occupancy", "queue_length", "capacity", "is_congested"} == set(info.keys())
 
 
 def test_get_stage_info_occupancy_initially_zero(env):
-    info = env.get_stage_info_for_agent("Main Stage")
+    info = env.get_stage_info_for_agent("Coachella Stage")
     assert info["occupancy"] == 0
 
 
 def test_get_stage_info_capacity_matches_config(env):
-    info = env.get_stage_info_for_agent("Main Stage")
-    assert info["capacity"] == STAGES["Main Stage"]["capacity"]
+    info = env.get_stage_info_for_agent("Coachella Stage")
+    assert info["capacity"] == STAGES["Coachella Stage"]["capacity"]
 
 
 def test_get_stage_info_not_congested_when_empty(env):
-    """Palco vazio não está congestionado."""
-    info = env.get_stage_info_for_agent("Main Stage")
+    info = env.get_stage_info_for_agent("Coachella Stage")
     assert info["is_congested"] is False
 
 
 def test_get_stage_info_congested_when_above_threshold():
     """Palco com 90% de ocupação está congestionado (threshold=0.85)."""
     fe = FestivalEnvironment(seed=42, policy=ACTIVE_MANAGEMENT)
-    stage = fe.stages["Main Stage"]
-    # Mockar occupancy diretamente — evita manipular internos do SimPy
+    stage = fe.stages["Coachella Stage"]
     from unittest.mock import PropertyMock
-    with patch.object(type(stage), "occupancy", new_callable=PropertyMock, return_value=73):
-        info = fe.get_stage_info_for_agent("Main Stage")
+    # 90% de 3000 = 2700
+    with patch.object(type(stage), "occupancy", new_callable=PropertyMock, return_value=2700):
+        info = fe.get_stage_info_for_agent("Coachella Stage")
         assert info["is_congested"] is True
 
 
 def test_get_stage_info_not_congested_baseline():
-    """Baseline também tem o helper — útil para comparação uniforme."""
     fe = FestivalEnvironment(seed=42, policy=BASELINE)
-    info = fe.get_stage_info_for_agent("Sahara Stage")
+    info = fe.get_stage_info_for_agent("Sahara")
     assert "is_congested" in info
 
 
@@ -180,11 +172,11 @@ def test_stage_not_full_initially(stage):
 
 
 def test_stage_capacity_matches_config(stage):
-    assert stage.capacity == STAGES["Main Stage"]["capacity"]
+    assert stage.capacity == STAGES["Coachella Stage"]["capacity"]
 
 
 def test_stage_popularity_matches_config(stage):
-    assert stage.popularity == STAGES["Main Stage"]["popularity"]
+    assert stage.popularity == STAGES["Coachella Stage"]["popularity"]
 
 
 def test_stage_has_no_show_duration_attr(stage):
@@ -201,16 +193,19 @@ def test_stage_no_active_show_at_start(stage):
 
 
 def test_stage_active_show_during_show(stage):
+    # Becky G: start=60, duration=60 → ativo entre t=60 e t=120
     stage.env._now = 65
     assert stage.has_active_show()
 
 
 def test_stage_no_active_show_between_shows(stage):
-    stage.env._now = 130
+    # Entre Becky G (fim=120) e Burna Boy (start=180)
+    stage.env._now = 150
     assert not stage.has_active_show()
 
 
 def test_stage_next_show_in_returns_positive(stage):
+    # t=0: próximo show é Becky G a t=60 → 60 minutos
     result = stage.next_show_in()
     assert result == pytest.approx(60.0)
 
@@ -220,9 +215,10 @@ def test_stage_next_show_in_returns_minus_one_after_last_show(stage):
     assert stage.next_show_in() == -1
 
 
-def test_outdoor_stage_has_active_show_at_start():
+def test_outdoor_theatre_has_active_show_at_start():
     fe = FestivalEnvironment(seed=0)
-    outdoor = fe.stages["Outdoor Stage"]
+    outdoor = fe.stages["Outdoor Theatre"]
+    # SZA: start=0, duration=40 → ativo a t=10
     outdoor.env._now = 10
     assert outdoor.has_active_show()
 
@@ -257,6 +253,7 @@ def test_stage_snapshot_current_artist_none_when_no_show(stage):
 
 
 def test_stage_snapshot_current_artist_during_show(stage):
+    # Becky G toca no Coachella Stage a t=65
     stage.env._now = 65
     snap = stage.snapshot()
     assert snap["current_artist"] == "Becky G"
@@ -266,7 +263,7 @@ def test_stage_snapshot_values_match_state(stage):
     stage.record_wait(5.0)
     stage.total_served = 3
     snap = stage.snapshot()
-    assert snap["stage"] == "Main Stage"
+    assert snap["stage"] == "Coachella Stage"
     assert snap["occupancy"] == 0
     assert snap["total_served"] == 3
     assert snap["avg_wait_time"] == 5.0
@@ -281,7 +278,7 @@ def test_choose_stage_returns_stage_instance(env):
 
 
 def test_choose_stage_excludes_specified_stages(env):
-    exclude = ["Main Stage", "Sahara Stage"]
+    exclude = ["Coachella Stage", "Sahara"]
     result = env.choose_stage(exclude=exclude)
     assert result.name not in exclude
 
@@ -295,6 +292,28 @@ def test_choose_stage_returns_none_when_all_full(env):
 def test_choose_stage_returns_none_when_all_excluded(env):
     all_stages = list(env.stages.keys())
     assert env.choose_stage(exclude=all_stages) is None
+
+
+def test_choose_stage_vip_only_excluded_for_general(env):
+    """Agentes General não devem conseguir ir ao Yuma (vip_only)."""
+    from src.coachella.simulation.agents import AgentType
+    results = set()
+    for _ in range(50):
+        s = env.choose_stage(agent_type=AgentType.GENERAL)
+        if s:
+            results.add(s.name)
+    assert "Yuma" not in results
+
+
+def test_choose_stage_vip_can_access_yuma(env):
+    """Agentes VIP podem aceder ao Yuma."""
+    from src.coachella.simulation.agents import AgentType
+    results = set()
+    for _ in range(100):
+        s = env.choose_stage(agent_type=AgentType.VIP)
+        if s:
+            results.add(s.name)
+    assert "Yuma" in results
 
 
 # ─────────────────────────────────────────────
@@ -316,7 +335,7 @@ def test_collect_metrics_one_entry_per_stage_per_interval(env):
 def test_save_metrics_creates_csv(env, tmp_path):
     fake_file = str(tmp_path / "metrics.csv")
     env.metrics_log = [{
-        "stage": "Main Stage", "time": 0, "occupancy": 0,
+        "stage": "Coachella Stage", "time": 0, "occupancy": 0,
         "queue_length": 0, "total_served": 0, "total_reneged": 0,
         "avg_wait_time": 0.0, "active_show": False, "current_artist": None,
     }]

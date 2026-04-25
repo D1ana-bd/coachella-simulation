@@ -41,6 +41,7 @@ class Stage:
         self.x = config["x"]
         self.y = config["y"]
         self.is_open = False  # palco fechado até ao primeiro show
+        self.vip_only = config.get("vip_only", False)
 
         # Recurso SimPy: PriorityResource se política VIP, Resource normal caso contrário
         if policy is not None and policy.vip_priority:
@@ -137,16 +138,23 @@ class FestivalEnvironment:
 
     # ── Escolha de palco ──────────────────────────────────────────────
 
-    def choose_stage(self, exclude: list[str] = None) -> Stage | None:
+    def choose_stage(self, exclude: list[str] = None, agent_type=None) -> Stage | None:
         """
         Escolhe um palco aleatoriamente, ponderado pela popularidade.
-        Opcionalmente exclui palcos (ex: os que estão cheios ou sem show).
+        Exclui palcos cheios, sem show, ou VIP-only para não-VIPs.
         """
-        candidates = [
-            s for name, s in self.stages.items()
-            if (exclude is None or name not in exclude)
-            and s.queue_length < MAX_QUEUE_LENGTH
-        ]
+        from src.coachella.simulation.agents import AgentType
+
+        candidates = []
+        for name, s in self.stages.items():
+            if exclude and name in exclude:
+                continue
+            if s.queue_length >= MAX_QUEUE_LENGTH:
+                continue
+            if s.vip_only and agent_type != AgentType.VIP:
+                continue
+            candidates.append(s)
+
         if not candidates:
             return None
 
