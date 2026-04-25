@@ -55,12 +55,12 @@ def agent(rngs):
 
 @pytest.fixture
 def main_stage(festival):
-    return festival.stages["Main Stage"]
+    return festival.stages["Coachella Stage"]
 
 
 @pytest.fixture
 def outdoor_stage(festival):
-    return festival.stages["Outdoor Stage"]
+    return festival.stages["Outdoor Theatre"]
 
 
 # ─────────────────────────────────────────────
@@ -69,7 +69,7 @@ def outdoor_stage(festival):
 
 def test_concert_scheduler_opens_stage(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]  # SZA: start=0, duration=40
     env.process(concert_scheduler(env, stage))
     env.run(until=5)
     assert stage.is_open
@@ -77,7 +77,7 @@ def test_concert_scheduler_opens_stage(festival):
 
 def test_concert_scheduler_closes_stage_after_show(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]  # SZA termina a t=40
     env.process(concert_scheduler(env, stage))
     env.run(until=41)
     assert not stage.is_open
@@ -85,7 +85,7 @@ def test_concert_scheduler_closes_stage_after_show(festival):
 
 def test_concert_scheduler_opens_for_each_show(festival):
     env = festival.env
-    stage = festival.stages["Main Stage"]
+    stage = festival.stages["Coachella Stage"]  # último show termina a t=480
     env.process(concert_scheduler(env, stage))
     env.run(until=481)
     assert not stage.is_open
@@ -96,13 +96,13 @@ def test_concert_scheduler_opens_for_each_show(festival):
 # ─────────────────────────────────────────────
 
 def test_get_next_show_or_active_returns_show_before_end(festival):
-    show = get_next_show_or_active("Sza", 10.0)
+    show = get_next_show_or_active("SZA", 10.0)  # SZA: start=0, duration=40
     assert show is not None
-    assert show["artist"] == "Sza"
+    assert show["artist"] == "SZA"
 
 
 def test_get_next_show_or_active_returns_none_after_end(festival):
-    show = get_next_show_or_active("Sza", 50.0)
+    show = get_next_show_or_active("SZA", 50.0)  # SZA termina a t=40
     assert show is None
 
 
@@ -125,7 +125,7 @@ def test_choose_stage_for_agent_returns_stage(festival, rngs):
 def test_choose_stage_for_agent_respects_exclude(festival, rngs):
     rng, np_rng = rngs
     agent = create_agent(rng, np_rng)
-    exclude = ["Main Stage", "Sahara Stage"]
+    exclude = ["Coachella Stage", "Sahara"]
     result = choose_stage_for_agent(agent, festival, exclude=exclude)
     if result is not None:
         assert result.name not in exclude
@@ -137,11 +137,11 @@ def test_fan_goes_to_favorite_stage(festival):
     agent = create_agent(rng, np_rng)
     agent.agent_type = AgentType.FAN
     agent.profile = PROFILES[AgentType.FAN]
-    agent.favorite_artists = ["Sza"]
+    agent.favorite_artists = ["SZA"]
     festival.env._now = 5
     result = choose_stage_for_agent(agent, festival)
     assert result is not None
-    assert result.name == "Outdoor Stage"
+    assert result.name == "Outdoor Theatre"
 
 
 def test_choose_stage_app_avoids_congested(festival_app):
@@ -149,14 +149,15 @@ def test_choose_stage_app_avoids_congested(festival_app):
     agent = create_agent(festival_app.rng, festival_app.np_rng)
     agent.favorite_artists = []
 
-    # Mockar TODOS os palcos exceto Outdoor Stage como congestionados
-    stages_to_mock = ["Main Stage", "Sahara Stage"]
+    # Mockar todos os palcos exceto Outdoor Theatre como congestionados
+    stages_to_mock = ["Coachella Stage", "Sahara", "Mojave", "Gobi",
+                      "Sonora", "Do Lab", "Yuma"]
 
     def mock_get_info(stage_name):
         return {
-            "occupancy": 80,
+            "occupancy": 100,
             "queue_length": 0,
-            "capacity": 80,
+            "capacity": 100,
             "is_congested": stage_name in stages_to_mock,
         }
 
@@ -165,7 +166,7 @@ def test_choose_stage_app_avoids_congested(festival_app):
             result = choose_stage_for_agent(agent, festival_app)
 
     assert result is not None
-    assert result.name == "Outdoor Stage"
+    assert result.name == "Outdoor Theatre"
 
 
 def test_choose_stage_baseline_ignores_congestion(festival):
@@ -173,9 +174,7 @@ def test_choose_stage_baseline_ignores_congestion(festival):
     agent = create_agent(festival.rng, festival.np_rng)
     agent.favorite_artists = []
 
-    # Com baseline, app_enabled=False → choose_stage_for_agent não filtra por congestionamento
     assert festival.policy.app_enabled is False
-    # Apenas verificamos que a função corre sem erro com baseline
     result = choose_stage_for_agent(agent, festival)
     from src.coachella.simulation.environment import Stage
     assert result is None or isinstance(result, Stage)
@@ -187,7 +186,7 @@ def test_choose_stage_baseline_ignores_congestion(festival):
 
 def test_agent_enters_stage_and_is_served(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]
     stage.is_open = True
     agent = create_agent(festival.rng, festival.np_rng)
     agent.patience = 999
@@ -201,7 +200,7 @@ def test_agent_enters_stage_and_is_served(festival):
 
 def test_agent_status_leaving_after_visit(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]
     stage.is_open = True
     agent = create_agent(festival.rng, festival.np_rng)
     agent.patience = 999
@@ -214,7 +213,7 @@ def test_agent_status_leaving_after_visit(festival):
 
 def test_wait_time_recorded_after_entry(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]
     stage.is_open = True
     agent = create_agent(festival.rng, festival.np_rng)
     agent.patience = 999
@@ -228,7 +227,7 @@ def test_wait_time_recorded_after_entry(festival):
 
 def test_agent_removed_from_active_after_visit(festival):
     env = festival.env
-    stage = festival.stages["Main Stage"]
+    stage = festival.stages["Coachella Stage"]
     agent = create_agent(festival.rng, festival.np_rng)
     agent.patience = 999
     festival.active_agents.append(agent)
@@ -241,9 +240,9 @@ def test_agent_removed_from_active_after_visit(festival):
 
 def test_agent_records_favorite_seen(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]
     agent = create_agent(festival.rng, festival.np_rng)
-    agent.favorite_artists = ["Sza"]
+    agent.favorite_artists = ["SZA"]
     agent.patience = 999
 
     festival.env._now = 0
@@ -251,12 +250,12 @@ def test_agent_records_favorite_seen(festival):
     env.process(visit_stage(env, agent, stage, festival))
     env.run()
 
-    assert "Sza" in agent.favorites_seen
+    assert "SZA" in agent.favorites_seen
 
 
 def test_agent_total_wait_time_updated(festival):
     env = festival.env
-    stage = festival.stages["Main Stage"]
+    stage = festival.stages["Coachella Stage"]
     agent = create_agent(festival.rng, festival.np_rng)
     agent.patience = 999
 
@@ -268,7 +267,7 @@ def test_agent_total_wait_time_updated(festival):
 
 def test_stage_added_to_stages_visited(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]
     stage.is_open = True
     agent = create_agent(festival.rng, festival.np_rng)
     agent.patience = 999
@@ -277,7 +276,7 @@ def test_stage_added_to_stages_visited(festival):
     env.process(visit_stage(env, agent, stage, festival))
     env.run()
 
-    assert "Outdoor Stage" in agent.stages_visited
+    assert "Outdoor Theatre" in agent.stages_visited
 
 
 # ─────────────────────────────────────────────
@@ -293,41 +292,27 @@ def test_vip_uses_priority_resource(festival_vip):
 def test_vip_served_before_general(festival_vip):
     """VIP deve ser servido antes de General quando palco está cheio."""
     env = festival_vip.env
-    stage = festival_vip.stages["Outdoor Stage"]
+    stage = festival_vip.stages["Outdoor Theatre"]
     stage.is_open = True
 
-    served_order = []
-
     # Encher o palco com blockers para forçar fila
-    blockers = []
     for _ in range(stage.capacity):
         b = create_agent(festival_vip.rng, festival_vip.np_rng)
         b.patience = 999
         b.watch_duration = 30
         b.leaves_early = False
-        blockers.append(b)
         env.process(visit_stage(env, b, stage, festival_vip))
 
-    # Agente General entra na fila primeiro
     general = create_agent(festival_vip.rng, festival_vip.np_rng)
     general.agent_type = AgentType.GENERAL
     general.patience = 999
     general.favorite_artists = []
 
-    # Agente VIP entra na fila depois
     vip = create_agent(festival_vip.rng, festival_vip.np_rng)
     vip.agent_type = AgentType.VIP
     vip.patience = 999
     vip.favorite_artists = []
 
-    def track_visit(agent, label):
-        def inner():
-            yield env.timeout(1)  # General chega primeiro
-            env.process(visit_stage(env, agent, stage, festival_vip))
-            yield env.timeout(0)
-        return inner
-
-    # General chega em t=1, VIP em t=2
     def spawn_general():
         yield env.timeout(1)
         env.process(visit_stage(env, general, stage, festival_vip))
@@ -340,8 +325,6 @@ def test_vip_served_before_general(festival_vip):
     env.process(spawn_vip())
     env.run(until=5)
 
-    # Com PriorityResource, VIP (priority=0) deve ultrapassar General (priority=2)
-    # Ambos estão em fila — VIP deve ter menor posição na fila ou ser servido primeiro
     assert isinstance(stage.resource, simpy.PriorityResource)
 
 
@@ -357,16 +340,18 @@ def test_baseline_uses_regular_resource(festival):
 
 def test_agent_reneges_when_patience_zero(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Yuma"]  # capacidade 400 — menor palco
     stage.is_open = True
 
     for _ in range(stage.capacity):
         blocker = create_agent(festival.rng, festival.np_rng)
         blocker.patience = 999
+        blocker.watch_duration = 999
         env.process(visit_stage(env, blocker, stage, festival))
 
     impatient = create_agent(festival.rng, festival.np_rng)
     impatient.favorite_artists = []
+    impatient.agent_type = AgentType.VIP  # VIP pode entrar no Yuma
     impatient.get_patience_for = lambda artist, np_rng: 0.0
 
     env.process(visit_stage(env, impatient, stage, festival))
@@ -377,19 +362,23 @@ def test_agent_reneges_when_patience_zero(festival):
 
 def test_patience_decreases_after_renege(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Yuma"]
+    stage.is_open = True
 
     for _ in range(stage.capacity):
         blocker = create_agent(festival.rng, festival.np_rng)
         blocker.patience = 999
+        blocker.watch_duration = 999
         env.process(visit_stage(env, blocker, stage, festival))
 
     agent = create_agent(festival.rng, festival.np_rng)
-    original_patience = agent.patience
+    agent.agent_type = AgentType.VIP
+    fixed_patience = 5.0
+    agent.get_patience_for = lambda artist, np_rng: fixed_patience
     env.process(visit_stage(env, agent, stage, festival))
 
-    env.run(until=original_patience + 1)
-    assert agent.patience <= original_patience
+    env.run(until=fixed_patience + 1)
+    assert agent.patience <= fixed_patience
 
 
 # ─────────────────────────────────────────────
@@ -397,23 +386,22 @@ def test_patience_decreases_after_renege(festival):
 # ─────────────────────────────────────────────
 
 def test_active_management_renege_logs_recommendation(festival_active, caplog):
-    """Com gestão ativa, renege em palco congestionado deve logar recomendação."""
     import logging
     env = festival_active.env
-    stage = festival_active.stages["Outdoor Stage"]
+    stage = festival_active.stages["Yuma"]
     stage.is_open = True
 
-    # Encher o palco
     for _ in range(stage.capacity):
         blocker = create_agent(festival_active.rng, festival_active.np_rng)
         blocker.patience = 999
+        blocker.watch_duration = 999
         env.process(visit_stage(env, blocker, stage, festival_active))
 
     impatient = create_agent(festival_active.rng, festival_active.np_rng)
     impatient.favorite_artists = []
+    impatient.agent_type = AgentType.VIP
     impatient.get_patience_for = lambda artist, np_rng: 0.0
 
-    # Forçar congestionamento e compliance
     with patch.object(festival_active.policy, "is_congested", return_value=True):
         with patch.object(festival_active.policy, "agent_follows_recommendation", return_value=True):
             with caplog.at_level(logging.DEBUG, logger="src.coachella.simulation.events"):
@@ -424,19 +412,20 @@ def test_active_management_renege_logs_recommendation(festival_active, caplog):
 
 
 def test_active_management_does_not_log_when_not_following(festival_active, caplog):
-    """Se agente não segue recomendação, não deve logar recomendação."""
     import logging
     env = festival_active.env
-    stage = festival_active.stages["Outdoor Stage"]
+    stage = festival_active.stages["Yuma"]
     stage.is_open = True
 
     for _ in range(stage.capacity):
         blocker = create_agent(festival_active.rng, festival_active.np_rng)
         blocker.patience = 999
+        blocker.watch_duration = 999
         env.process(visit_stage(env, blocker, stage, festival_active))
 
     impatient = create_agent(festival_active.rng, festival_active.np_rng)
     impatient.favorite_artists = []
+    impatient.agent_type = AgentType.VIP
     impatient.get_patience_for = lambda artist, np_rng: 0.0
 
     with patch.object(festival_active.policy, "is_congested", return_value=True):
@@ -458,7 +447,7 @@ def test_try_another_stage_goes_to_alternative(festival):
     agent.patience = 999
     festival.active_agents.append(agent)
 
-    env.process(try_another_stage(env, agent, festival, exclude=["Main Stage"], time_spent=0.0))
+    env.process(try_another_stage(env, agent, festival, exclude=["Coachella Stage"], time_spent=0.0))
     env.run()
 
     assert agent.status == "leaving"
@@ -541,7 +530,7 @@ def test_agent_arrivals_creates_mixed_profiles(festival):
 
 def test_served_by_profile_increments(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]
     stage.is_open = True
     agent = create_agent(festival.rng, festival.np_rng)
     agent.patience = 999
@@ -556,16 +545,18 @@ def test_served_by_profile_increments(festival):
 
 def test_reneged_by_profile_increments(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Yuma"]
     stage.is_open = True
 
     for _ in range(stage.capacity):
         blocker = create_agent(festival.rng, festival.np_rng)
         blocker.patience = 999
+        blocker.watch_duration = 999
         env.process(visit_stage(env, blocker, stage, festival))
 
     impatient = create_agent(festival.rng, festival.np_rng)
     impatient.favorite_artists = []
+    impatient.agent_type = AgentType.VIP
     impatient.get_patience_for = lambda artist, np_rng: 0.0
 
     env.process(visit_stage(env, impatient, stage, festival))
@@ -578,7 +569,7 @@ def test_reneged_by_profile_increments(festival):
 
 def test_leaves_early_shorter_watch(festival):
     env = festival.env
-    stage = festival.stages["Outdoor Stage"]
+    stage = festival.stages["Outdoor Theatre"]
     stage.is_open = True
 
     early = create_agent(festival.rng, festival.np_rng)

@@ -135,7 +135,7 @@ def choose_stage_for_agent(agent: Agent, festival: FestivalEnvironment,
             return stage
 
     # Fallback: escolha ponderada por popularidade
-    return festival.choose_stage(exclude=exclude)
+    return festival.choose_stage(exclude=exclude, agent_type=agent.agent_type)
 
 
 def get_next_show_or_active(artist: str, current_time: float) -> dict | None:
