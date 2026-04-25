@@ -8,7 +8,7 @@ Todos os parâmetros do festival, agentes e visualização ficam aqui.
 # ─────────────────────────────────────────────
 RANDOM_SEED = 42
 SIM_DURATION = 480          # minutos (ex: 8h de festival, 12:00 → 20:00)
-NUM_AGENTS = 200            # agentes na fase 1 (escalar depois)
+NUM_AGENTS = 10000            # agentes na fase 4
 AGENT_SPAWN_RATE = 2.0      # média de chegadas por minuto (distribuição Poisson)
 NUM_REPLICAS = 30       # réplicas por política (garante normalidade assintótica — TLC)
 
