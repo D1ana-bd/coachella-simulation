@@ -115,8 +115,8 @@ AGENT_PROFILES = {
 # CHEGADAS (ondas temporais)
 # ─────────────────────────────────────────────
 ARRIVAL_WAVES = [
-    {"start": 0,   "end": 120, "rate": 1.0},   # abertura — fluxo tranquilo
-    {"start": 120, "end": 240, "rate": 2.5},   # aquecimento
-    {"start": 240, "end": 360, "rate": 4.0},   # pré-headliners — pico
-    {"start": 360, "end": 480, "rate": 2.0},   # headliners — já toda a gente chegou
+    {"start": 0,   "end": 120, "rate": 8.0},   # abertura
+    {"start": 120, "end": 240, "rate": 20.0},  # aquecimento
+    {"start": 240, "end": 360, "rate": 32.0},  # pico pré-headliners
+    {"start": 360, "end": 480, "rate": 16.0},  # headliners
 ]
