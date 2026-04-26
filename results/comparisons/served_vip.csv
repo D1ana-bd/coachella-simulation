@@ -1,0 +1,7 @@
+policy_a,policy_b,statistic,p_value,significant,effect_size
+Baseline,Active Management,558.5,0.110215,False,0.2062
+Baseline,Informative App,555.0,0.122239,False,0.1995
+Baseline,VIP Priority,540.0,0.185632,False,0.1709
+Active Management,VIP Priority,437.5,0.859135,False,0.0229
+Informative App,VIP Priority,439.0,0.876591,False,0.02
+Informative App,Active Management,451.5,0.988197,False,0.0019
