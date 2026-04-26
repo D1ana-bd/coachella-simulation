@@ -75,7 +75,7 @@ def print_summary(report: dict):
         df_wait = report["summary"]["avg_wait_time"]
         best    = df_wait.iloc[0]  # menor média (já ordenado asc)
         worst   = df_wait.iloc[-1]
-        print(f"\n⏱  Tempo Médio de Espera:")
+        print(f"\n  Tempo Médio de Espera:")
         print(f"   Melhor : {best['policy']:25s} → {best['mean']:.2f} min "
               f"(IC 95%: [{best['ci_lower']:.2f}, {best['ci_upper']:.2f}])")
         print(f"   Pior   : {worst['policy']:25s} → {worst['mean']:.2f} min")
@@ -84,14 +84,14 @@ def print_summary(report: dict):
     if "throughput" in report["summary"]:
         df_tp = report["summary"]["throughput"].sort_values("mean", ascending=False)
         best  = df_tp.iloc[0]
-        print(f"\n🎯  Throughput (agentes/hora):")
+        print(f"\n Throughput (agentes/hora):")
         print(f"   Melhor : {best['policy']:25s} → {best['mean']:.1f} ag/h")
 
     # Taxa de desistência
     if "renege_rate" in report["summary"]:
         df_rr = report["summary"]["renege_rate"]
         best  = df_rr.iloc[0]
-        print(f"\n🚶  Taxa de Desistência:")
+        print(f"\n  Taxa de Desistência:")
         print(f"   Menor  : {best['policy']:25s} → {best['mean']:.1%}")
 
     # Gini
@@ -99,7 +99,7 @@ def print_summary(report: dict):
         gini_df = report["gini"].sort_values("gini_mean")
         most_equal   = gini_df.iloc[0]
         least_equal  = gini_df.iloc[-1]
-        print(f"\n⚖️   Equidade (Coeficiente de Gini):")
+        print(f"\n   Equidade (Coeficiente de Gini):")
         print(f"   Mais igual    : {most_equal['policy']:20s} → Gini = {most_equal['gini_mean']:.3f}")
         print(f"   Mais desigual : {least_equal['policy']:20s} → Gini = {least_equal['gini_mean']:.3f}")
 
@@ -107,7 +107,7 @@ def print_summary(report: dict):
     if "avg_wait_time" in report["comparisons"]:
         comp_df  = report["comparisons"]["avg_wait_time"]
         sig      = comp_df[comp_df["significant"]]
-        print(f"\n📊  Diferenças Significativas (avg_wait_time, α=0.05):")
+        print(f"\n Diferenças Significativas (avg_wait_time, α=0.05):")
         if sig.empty:
             print("   Nenhuma diferença significativa encontrada.")
         else:
