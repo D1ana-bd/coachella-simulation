@@ -68,7 +68,7 @@ WATCH_DURATION_MIN = 20         # tempo mínimo que fica a ver o concerto
 WATCH_DURATION_MAX = 60         # tempo máximo
 MAX_WAIT_FOR_SHOW = 20  # minutos máximos que um agente espera pelo próximo show
 # ENTRADA DO FESTIVAL
-FESTIVAL_ENTRANCE = {"x": 450, "y": 500}   # ponto fixo de entrada
+FESTIVAL_ENTRANCE = {"x": 484, "y": 684}   # ponto fixo de entrada
 AGENT_MOVE_SPEED = 80                        # pixels por segundo simulado
 
 # ─────────────────────────────────────────────
