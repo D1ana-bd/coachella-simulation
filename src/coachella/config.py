@@ -21,7 +21,7 @@ STAGES = {
         "popularity": 0.35, "vip_only": False,
     },
     "Sahara": {
-        "capacity": 400, "x": 210, "y": 560,
+        "capacity": 400, "x": 229, "y": 629,
         "popularity": 0.25, "vip_only": False,
     },
     "Outdoor Theatre": {
@@ -29,19 +29,19 @@ STAGES = {
         "popularity": 0.15, "vip_only": False,
     },
     "Mojave": {
-        "capacity": 200, "x": 870, "y": 490,
+        "capacity": 200, "x": 894, "y": 553,
         "popularity": 0.10, "vip_only": False,
     },
     "Gobi": {
-        "capacity": 150, "x": 700, "y": 390,
+        "capacity": 150, "x": 715, "y": 492,
         "popularity": 0.07, "vip_only": False,
     },
     "Sonora": {
-        "capacity": 100, "x": 630, "y": 255,
+        "capacity": 100, "x": 696, "y": 315,
         "popularity": 0.04, "vip_only": False,
     },
     "Do Lab": {
-        "capacity": 100, "x": 500, "y": 620,
+        "capacity": 100, "x": 593, "y": 687,
         "popularity": 0.04, "vip_only": False,
     },
     "Yuma": {
@@ -50,7 +50,7 @@ STAGES = {
     },
 }
 
-FESTIVAL_ENTRANCE = {"x": 500, "y": 750}
+FESTIVAL_ENTRANCE = {"x": 483, "y": 884}
 
 # ─────────────────────────────────────────────
 # FILAS DE ESPERA
