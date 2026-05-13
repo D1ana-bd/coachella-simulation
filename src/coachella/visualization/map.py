@@ -1,10 +1,9 @@
 """
-visualization/map.py - Mapa do festival como grafo NetworkX + rendering Pygame
-O grafo representa os palcos como nós e as distâncias entre eles como arestas.
-Usa pygame.gfxdraw para rendering com anti-aliasing.
+visualization/map.py - Mapa do festival com MAP.png como fundo + sprites pixel art
 """
 
 import math
+import os
 import networkx as nx
 import pygame
 import pygame.gfxdraw
@@ -17,203 +16,191 @@ from src.coachella.data.lineup import get_active_show
 
 logger = get_logger(__name__)
 
+# Path dos assets
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets")
 
-# ─────────────────────────────────────────────
-# HELPERS DE RENDERING COM AA
-# ─────────────────────────────────────────────
+HUD_WIDTH = 280
+MAP_WIDTH  = WINDOW_WIDTH - HUD_WIDTH
+MAP_HEIGHT = WINDOW_HEIGHT
 
-def draw_aacircle(surface: pygame.Surface, x: int, y: int, r: int, color: tuple):
-    """Círculo preenchido com anti-aliasing."""
+# Tamanho dos sprites no ecrã
+SPRITE_SIZE = 18  # pixels — pequeno mas reconhecível
+
+
+def draw_aacircle(surface, x, y, r, color):
     pygame.gfxdraw.aacircle(surface, x, y, r, color)
     pygame.gfxdraw.filled_circle(surface, x, y, r, color)
 
 
-def draw_aaline(surface: pygame.Surface, x1: int, y1: int, x2: int, y2: int,
-                color: tuple, thickness: int = 1):
-    """Linha com anti-aliasing e espessura configurável."""
-    pygame.gfxdraw.line(surface, x1, y1, x2, y2, color)
-    for i in range(1, thickness):
-        pygame.gfxdraw.line(surface, x1, y1 + i, x2, y2 + i, color)
-        pygame.gfxdraw.line(surface, x1, y1 - i, x2, y2 - i, color)
-
-
-# ─────────────────────────────────────────────
-# GRAFO DO FESTIVAL
-# ─────────────────────────────────────────────
-
 class FestivalMap:
-    """
-    Representa o layout do festival como um grafo não-dirigido.
-
-    Nós:     palcos (com atributos de posição, capacidade, popularidade)
-    Arestas: ligações entre palcos, pesadas pela distância euclidiana
-    """
-
     def __init__(self):
         self.graph = nx.Graph()
         self._build_graph()
         self._max_dist = max(d["weight"] for _, _, d in self.graph.edges(data=True))
-        logger.info("FestivalMap inicializado com %d nós e %d arestas.",
-                    self.graph.number_of_nodes(), self.graph.number_of_edges())
+
+        # ── Carregar fundo ───────────────────────────────────────────
+        map_path = os.path.join(ASSETS_DIR, "MAP.png")
+        try:
+            raw = pygame.image.load(map_path).convert()
+            self.bg = pygame.transform.scale(raw, (MAP_WIDTH, MAP_HEIGHT))
+            logger.info("MAP.png carregado e escalado para %dx%d", MAP_WIDTH, MAP_HEIGHT)
+        except Exception as e:
+            logger.warning("Não foi possível carregar MAP.png: %s", e)
+            self.bg = None
+
+        # ── Carregar sprites ─────────────────────────────────────────
+        self.sprites = {}
+        sprite_files = {
+            "general": "stripe_geral.png",
+            "fan":     "stripe_FAN.png",
+            "vip":     "stripe_VIP.png",
+        }
+        for key, fname in sprite_files.items():
+            path = os.path.join(ASSETS_DIR, fname)
+            try:
+                img = pygame.image.load(path).convert_alpha()
+                # Remover fundo preto (transparência)
+                img.set_colorkey((0, 0, 0))
+                self.sprites[key] = pygame.transform.scale(img, (SPRITE_SIZE, SPRITE_SIZE))
+                logger.info("Sprite '%s' carregado.", key)
+            except Exception as e:
+                logger.warning("Não foi possível carregar sprite '%s': %s", key, e)
+                self.sprites[key] = None
+
+        logger.info("FestivalMap inicializado com %d nós.", self.graph.number_of_nodes())
 
     def _build_graph(self):
-        """Constrói o grafo a partir do config: adiciona nós e arestas."""
         for name, cfg in STAGES.items():
             self.graph.add_node(name, **cfg)
-            logger.debug("Nó adicionado: %s %s", name, cfg)
-
         stage_names = list(STAGES.keys())
         for i in range(len(stage_names)):
             for j in range(i + 1, len(stage_names)):
                 a, b = stage_names[i], stage_names[j]
                 dist = self._euclidean_distance(a, b)
                 self.graph.add_edge(a, b, weight=dist)
-                logger.debug("Aresta: %s ↔ %s | distância: %.1f", a, b, dist)
 
-    def _euclidean_distance(self, stage_a: str, stage_b: str) -> float:
-        """Calcula a distância euclidiana entre dois palcos com base nas posições x/y."""
+    def _euclidean_distance(self, stage_a, stage_b):
         xa, ya = STAGES[stage_a]["x"], STAGES[stage_a]["y"]
         xb, yb = STAGES[stage_b]["x"], STAGES[stage_b]["y"]
         return math.sqrt((xb - xa) ** 2 + (yb - ya) ** 2)
 
-    # ── Queries úteis ────────────────────────────────────────────────
-
-    def distance(self, stage_a: str, stage_b: str) -> float:
-        """Retorna a distância (peso da aresta) entre dois palcos."""
+    def distance(self, stage_a, stage_b):
         return self.graph[stage_a][stage_b]["weight"]
 
-    def nearest_stage(self, from_stage: str, exclude: list[str] = None) -> str | None:
-        """Retorna o palco mais próximo, excluindo opcionalmente alguns palcos."""
+    def nearest_stage(self, from_stage, exclude=None):
         neighbors = [
-            (neighbor, data["weight"])
-            for neighbor, data in self.graph[from_stage].items()
-            if exclude is None or neighbor not in exclude
+            (n, d["weight"]) for n, d in self.graph[from_stage].items()
+            if exclude is None or n not in exclude
         ]
-        if not neighbors:
-            return None
-        return min(neighbors, key=lambda x: x[1])[0]
+        return min(neighbors, key=lambda x: x[1])[0] if neighbors else None
 
-    def shortest_path(self, from_stage: str, to_stage: str) -> list[str]:
-        """Retorna o caminho mais curto entre dois palcos (via Dijkstra)."""
+    def shortest_path(self, from_stage, to_stage):
         return nx.shortest_path(self.graph, from_stage, to_stage, weight="weight")
 
-    def all_distances(self) -> dict:
-        """Retorna um dicionário com todas as distâncias entre pares de palcos."""
-        return {
-            (a, b): round(data["weight"], 2)
-            for a, b, data in self.graph.edges(data=True)
-        }
-
-    def stage_position(self, stage_name: str) -> tuple[int, int]:
-        """Retorna a posição (x, y) de um palco."""
+    def stage_position(self, stage_name):
         node = self.graph.nodes[stage_name]
         return node["x"], node["y"]
 
-    # ── Rendering Pygame ─────────────────────────────────────────────
+    def draw(self, surface, festival=None):
+        # ── Fundo ────────────────────────────────────────────────────
+        if self.bg:
+            surface.blit(self.bg, (0, 0))
+        else:
+            surface.fill(COLORS["background"])
 
-    def draw(self, surface: pygame.Surface, festival=None):
-        """Renderiza o mapa completo do festival na surface Pygame."""
-        self._draw_edges(surface)
-        self._draw_stages(surface, festival)
+        # ── Labels e indicadores dos palcos ──────────────────────────
+        self._draw_stage_indicators(surface, festival)
+
+        # ── Agentes ──────────────────────────────────────────────────
         if festival is not None:
             self._draw_agents(surface, festival)
 
-    def _draw_edges(self, surface: pygame.Surface):
-        """Desenha as arestas com anti-aliasing e espessura proporcional."""
-        font = pygame.font.SysFont("monospace", 11)
-
-        for a, b, data in self.graph.edges(data=True):
-            x1, y1 = self.stage_position(a)
-            x2, y2 = self.stage_position(b)
-            dist = data["weight"]
-            thickness = max(1, int(3 * (1 - dist / self._max_dist)))
-
-            draw_aaline(surface, x1, y1, x2, y2, COLORS["grid"], thickness)
-
-            mid_x, mid_y = (x1 + x2) // 2, (y1 + y2) // 2
-            label = font.render(f"{dist:.0f}m", True, COLORS["grid"])
-            surface.blit(label, (mid_x - label.get_width() // 2, mid_y - 8))
-
-    def _draw_stages(self, surface: pygame.Surface, festival=None):
-        """Desenha cada palco como um círculo AA com label e borda."""
-        font_name = pygame.font.SysFont("monospace", 13, bold=True)
-        font_info = pygame.font.SysFont("monospace", 11)
+    def _draw_stage_indicators(self, surface, festival=None):
+        """
+        Overlay minimalista sobre o mapa:
+        - Barra de ocupação pequena por baixo do nome
+        - Artista atual a tocar
+        Sem círculos — o mapa já tem os palcos desenhados.
+        """
+        font_name   = pygame.font.SysFont("monospace", 10, bold=True)
+        font_artist = pygame.font.SysFont("monospace", 9)
 
         for name in self.graph.nodes:
             x, y = self.stage_position(name)
 
-            color = COLORS["stage"]
-            occupancy_text = ""
+            # ── Caixa semitransparente de fundo ───────────────────────
+            label_surf = font_name.render(name, True, (255, 255, 255))
+            box_w = max(label_surf.get_width() + 8, 60)
+            box_h = 14
+            box = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+            box.fill((0, 0, 0, 140))
+            surface.blit(box, (x - box_w // 2, y - STAGE_RADIUS - 18))
+            surface.blit(label_surf, (x - label_surf.get_width() // 2, y - STAGE_RADIUS - 17))
+
             if festival is not None:
                 stage_obj = festival.stages.get(name)
                 if stage_obj:
-                    ratio = stage_obj.occupancy / stage_obj.capacity
-                    if ratio >= 1.0:
-                        color = COLORS["stage_full"]
-                    elif ratio >= 0.7:
-                        color = (255, 165, 0)
-                    occupancy_text = f"{stage_obj.occupancy}/{stage_obj.capacity}"
+                    ratio = min(stage_obj.occupancy / stage_obj.capacity, 1.0)
 
-            # Círculo preenchido AA
-            draw_aacircle(surface, x, y, STAGE_RADIUS, color)
-            # Borda AA (dupla para ficar mais visível)
-            pygame.gfxdraw.aacircle(surface, x, y, STAGE_RADIUS, COLORS["text"])
-            pygame.gfxdraw.aacircle(surface, x, y, STAGE_RADIUS + 1, COLORS["text"])
+                    # Barra de ocupação
+                    bar_w = 50
+                    bar_x = x - bar_w // 2
+                    bar_y = y - STAGE_RADIUS - 4
+                    pygame.draw.rect(surface, (40, 40, 40), (bar_x, bar_y, bar_w, 5), border_radius=2)
+                    fill_color = (
+                        (220, 60, 60) if ratio >= 1.0 else
+                        (255, 165, 0) if ratio >= 0.7 else
+                        (80, 200, 120)
+                    )
+                    pygame.draw.rect(surface, fill_color,
+                                     (bar_x, bar_y, int(bar_w * ratio), 5), border_radius=2)
 
-            label = font_name.render(name, True, COLORS["text"])
-            surface.blit(label, (x - label.get_width() // 2, y - STAGE_RADIUS - 20))
-
-            if occupancy_text:
-                info = font_info.render(occupancy_text, True, COLORS["text"])
-                surface.blit(info, (x - info.get_width() // 2, y - info.get_height() // 2))
-
-            # Artista atual a tocar
-            if festival is not None:
+                # Artista a tocar
                 active = get_active_show(name, festival.env.now)
                 if active:
-                    artist_label = font_info.render(
-                        f"\u266a {active['artist']}", True, (255, 215, 0)
+                    artist_surf = font_artist.render(
+                        f"♪ {active['artist'][:16]}", True, (255, 215, 0)
                     )
-                    surface.blit(artist_label, (
-                        x - artist_label.get_width() // 2,
-                        y + STAGE_RADIUS + 5
-                    ))
+                    bg2 = pygame.Surface((artist_surf.get_width() + 6, 13), pygame.SRCALPHA)
+                    bg2.fill((0, 0, 0, 120))
+                    surface.blit(bg2, (x - artist_surf.get_width() // 2 - 3,
+                                       y + STAGE_RADIUS + 2))
+                    surface.blit(artist_surf, (x - artist_surf.get_width() // 2,
+                                               y + STAGE_RADIUS + 3))
 
-    def _draw_agents(self, surface: pygame.Surface, festival):
-        """Desenha os agentes com cor por perfil e forma por status."""
+    def _draw_agents(self, surface, festival):
         from src.coachella.simulation.agents import AgentType
 
-        PROFILE_COLORS = {
+        sprite_keys = {
+            AgentType.GENERAL: "general",
+            AgentType.FAN:     "fan",
+            AgentType.VIP:     "vip",
+        }
+        fallback_colors = {
             AgentType.GENERAL: COLORS["agent_general"],
-            AgentType.FAN: COLORS["agent_fan"],
-            AgentType.VIP: COLORS["agent_vip"],
+            AgentType.FAN:     COLORS["agent_fan"],
+            AgentType.VIP:     COLORS["agent_vip"],
         }
 
         for agent in festival.active_agents:
             if agent.status not in ("moving", "waiting_show", "queuing", "watching"):
                 continue
 
-            base_color = PROFILE_COLORS.get(agent.agent_type, COLORS["agent"])
-
-            # Status influencia o tamanho do agente
-            if agent.status == "watching":
-                radius = AGENT_RADIUS + 2  # maior — está a ver o show
-            elif agent.status == "queuing":
-                radius = AGENT_RADIUS  # normal — na fila
-            else:
-                radius = AGENT_RADIUS - 1  # mais pequeno — em movimento/espera
-
-            # Status "queuing" e "waiting_show" escurece ligeiramente a cor
-            if agent.status in ("queuing", "waiting_show"):
-                color = tuple(max(0, c - 60) for c in base_color)
-            else:
-                color = base_color
-
             ax = int(agent.x)
             ay = int(agent.y)
 
+            # Dispersão visual quando está num palco
             if agent.status in ("queuing", "watching", "waiting_show"):
                 ax += ((agent.id * 7) % (STAGE_RADIUS * 2)) - STAGE_RADIUS
                 ay += ((agent.id * 13) % (STAGE_RADIUS * 2)) - STAGE_RADIUS
 
-            draw_aacircle(surface, ax, ay, radius, color)
+            key = sprite_keys.get(agent.agent_type)
+            sprite = self.sprites.get(key) if key else None
+
+            if sprite:
+                # Centrar o sprite na posição do agente
+                surface.blit(sprite, (ax - SPRITE_SIZE // 2, ay - SPRITE_SIZE // 2))
+            else:
+                # Fallback: círculo colorido
+                color = fallback_colors.get(agent.agent_type, COLORS["agent"])
+                draw_aacircle(surface, ax, ay, AGENT_RADIUS, color)
