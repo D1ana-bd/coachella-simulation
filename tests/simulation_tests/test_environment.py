@@ -58,7 +58,9 @@ def test_environment_creates_output_dir(tmp_path):
             fe = FestivalEnvironment()
     assert os.path.exists(fake_output)
 
-
+def test_environment_initial_all_agents_empty(env):
+    assert env.all_agents == []
+    
 # ─────────────────────────────────────────────
 # TESTES: FestivalEnvironment - PolicyConfig
 # ─────────────────────────────────────────────

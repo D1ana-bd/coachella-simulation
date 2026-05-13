@@ -1,5 +1,5 @@
 policy,gini_mean,gini_std,ci_lower,ci_upper,n_replicas
 Active Management,0.906,0.2468,0.8139,0.9982,30
 Informative App,0.9067,0.2469,0.8145,0.9989,30
-VIP Priority,0.9101,0.2478,0.8176,1.0027,30
 Baseline,0.9533,0.0062,0.951,0.9556,30
+VIP Priority,0.9619,0.0066,0.9595,0.9644,30

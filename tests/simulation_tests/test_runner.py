@@ -129,6 +129,22 @@ class TestRunSingle:
         )
         assert profile_total == single_result["total_reneged"]
 
+    def test_has_new_metrics(self, single_result):
+        for key in ["satisfaction_general", "satisfaction_fan", "satisfaction_vip",
+                    "stages_visited_general", "stages_visited_fan", "stages_visited_vip",
+                    "fan_satisfaction"]:
+            assert key in single_result, f"Falta chave: {key}"
+
+    def test_satisfaction_between_0_and_1(self, single_result):
+        for key in ["satisfaction_general", "satisfaction_fan", "satisfaction_vip"]:
+            assert 0.0 <= single_result[key] <= 1.0, f"{key} fora do range"
+
+    def test_stages_visited_non_negative(self, single_result):
+        for key in ["stages_visited_general", "stages_visited_fan", "stages_visited_vip"]:
+            assert single_result[key] >= 0.0
+
+    def test_fan_satisfaction_between_0_and_1(self, single_result):
+        assert 0.0 <= single_result["fan_satisfaction"] <= 1.0
 
 # ─────────────────────────────────────────────
 # TESTES: run_single — reproducibilidade

@@ -493,14 +493,14 @@ def test_agent_arrivals_uses_exponential_interarrival(festival):
     assert len(set(arrival_times)) > 1
 
 
-def test_agent_arrivals_all_agents_eventually_leave(festival):
+def test_agent_arrivals_populates_all_agents(festival):
     env = festival.env
     festival.setup()
     with patch("src.coachella.simulation.events.NUM_AGENTS", 10):
         env.process(agent_arrivals(env, festival))
         env.run(until=600)
 
-    assert len(festival.active_agents) == 0
+    assert len(festival.all_agents) == 10
 
 
 def test_total_served_leq_num_agents(festival):

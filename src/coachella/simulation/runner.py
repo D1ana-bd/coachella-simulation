@@ -13,6 +13,7 @@ Separação de responsabilidades:
 
 import logging
 import pandas as pd
+import numpy as np
 from src.coachella.simulation.environment import FestivalEnvironment
 from src.coachella.simulation.events import agent_arrivals, concert_scheduler
 from src.coachella.simulation.policies import PolicyConfig, ALL_POLICIES
@@ -55,53 +56,89 @@ def run_single(policy: PolicyConfig, seed: int) -> dict:
     env.run(until=SIM_DURATION)
 
     # ── Recolher métricas agregadas ───────────────────────────────────
-    total_served  = sum(s.total_served  for s in festival.stages.values())
+    total_served = sum(s.total_served for s in festival.stages.values())
     total_reneged = sum(s.total_reneged for s in festival.stages.values())
-    total_agents  = total_served + total_reneged
+    total_agents = total_served + total_reneged
 
-    # Tempo médio de espera global (média ponderada por palco)
+    # Tempo médio de espera global
     all_wait_times = []
     for stage in festival.stages.values():
         all_wait_times.extend(stage.wait_times)
     avg_wait_time = sum(all_wait_times) / len(all_wait_times) if all_wait_times else 0.0
 
-    # Throughput: agentes servidos por hora
+    # Throughput
     hours = SIM_DURATION / 60.0
     throughput = total_served / hours if hours > 0 else 0.0
 
     # Taxa de desistência global
     renege_rate = total_reneged / total_agents if total_agents > 0 else 0.0
 
-    # Métricas por perfil
+    # ── NOVAS MÉTRICAS ────────────────────────────────────────────────
+
+    # Satisfaction score: 1 - (wait / patience), por agente, agregado por perfil
+    # Só agentes que passaram por pelo menos uma fila (total_wait_time > 0 ou served)
+    satisfaction_scores = {t: [] for t in AgentType}
+    stages_visited_counts = {t: [] for t in AgentType}
+    fan_saw_favorite = []  # lista de bools para agentes do tipo FAN
+
+    for agent in festival.all_agents:
+        # satisfaction: clamp entre 0 e 1
+        if agent.patience > 0:
+            score = max(0.0, 1.0 - (agent.total_wait_time / agent.patience))
+        else:
+            score = 0.0
+        satisfaction_scores[agent.agent_type].append(score)
+
+        # palcos visitados
+        stages_visited_counts[agent.agent_type].append(len(agent.stages_visited))
+
+        # fan satisfaction: viu pelo menos um favorito?
+        if agent.agent_type == AgentType.FAN:
+            fan_saw_favorite.append(len(agent.favorites_seen) > 0)
+
+    # Agregar por perfil
+    satisfaction_metrics = {}
+    stages_metrics = {}
+    for agent_type in AgentType:
+        key = agent_type.value
+        scores = satisfaction_scores[agent_type]
+        counts = stages_visited_counts[agent_type]
+        satisfaction_metrics[f"satisfaction_{key}"] = round(float(np.mean(scores)), 4) if scores else 0.0
+        stages_metrics[f"stages_visited_{key}"] = round(float(np.mean(counts)), 4) if counts else 0.0
+
+    fan_satisfaction = round(float(np.mean(fan_saw_favorite)), 4) if fan_saw_favorite else 0.0
+
+    # ── Métricas por perfil ───────────────────────────────────────────
     profile_metrics = {}
     for agent_type in AgentType:
         key = agent_type.value
-        served  = festival.served_by_profile.get(agent_type, 0)
+        served = festival.served_by_profile.get(agent_type, 0)
         reneged = festival.reneged_by_profile.get(agent_type, 0)
-        total   = served + reneged
-        profile_metrics[f"served_{key}"]      = served
-        profile_metrics[f"reneged_{key}"]     = reneged
+        total = served + reneged
+        profile_metrics[f"served_{key}"] = served
+        profile_metrics[f"reneged_{key}"] = reneged
         profile_metrics[f"renege_rate_{key}"] = reneged / total if total > 0 else 0.0
 
     # Métricas por palco
     stage_metrics = {}
     for name, stage in festival.stages.items():
         safe_name = name.lower().replace(" ", "_")
-        stage_metrics[f"served_{safe_name}"]    = stage.total_served
-        stage_metrics[f"reneged_{safe_name}"]   = stage.total_reneged
-        stage_metrics[f"avg_wait_{safe_name}"]  = round(stage.avg_wait_time(), 2)
+        stage_metrics[f"served_{safe_name}"] = stage.total_served
+        stage_metrics[f"reneged_{safe_name}"] = stage.total_reneged
+        stage_metrics[f"avg_wait_{safe_name}"] = round(stage.avg_wait_time(), 2)
 
     result = {
-        "policy":        policy.name,
-        "seed":          seed,
-        # Métricas globais
-        "total_served":  total_served,
+        "policy": policy.name,
+        "seed": seed,
+        "total_served": total_served,
         "total_reneged": total_reneged,
         "avg_wait_time": round(avg_wait_time, 4),
-        "throughput":    round(throughput, 4),
-        "renege_rate":   round(renege_rate, 4),
-        # Wait times individuais — usados para Gini e distribuições
-        "wait_times":    all_wait_times,
+        "throughput": round(throughput, 4),
+        "renege_rate": round(renege_rate, 4),
+        "fan_satisfaction": fan_satisfaction,
+        "wait_times": all_wait_times,
+        **satisfaction_metrics,
+        **stages_metrics,
         **profile_metrics,
         **stage_metrics,
     }

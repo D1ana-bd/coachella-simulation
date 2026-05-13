@@ -333,6 +333,7 @@ def agent_arrivals(env: simpy.Environment, festival: FestivalEnvironment):
 
             agent = create_agent(festival.rng, festival.np_rng)
             festival.active_agents.append(agent)
+            festival.all_agents.append(agent)  # ← 
 
             stage = choose_stage_for_agent(agent, festival)
 

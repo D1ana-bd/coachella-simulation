@@ -1,28 +1,28 @@
 policy,mean,std,ci_lower,ci_upper,n,metric
 Informative App,0.0665,0.0609,0.0438,0.0893,30,avg_wait_time
 Active Management,0.0675,0.0637,0.0438,0.0913,30,avg_wait_time
-VIP Priority,0.0687,0.067,0.0437,0.0937,30,avg_wait_time
+VIP Priority,0.3728,0.0772,0.344,0.4016,30,avg_wait_time
 Baseline,0.3773,0.071,0.3508,0.4038,30,avg_wait_time
 Informative App,675.5792,19.9764,668.1199,683.0385,30,throughput
 Active Management,675.6625,20.1449,668.1403,683.1847,30,throughput
-VIP Priority,675.6625,19.9917,668.1975,683.1275,30,throughput
 Baseline,679.9542,17.1534,673.549,686.3593,30,throughput
+VIP Priority,680.1833,17.3498,673.7048,686.6619,30,throughput
 Active Management,0.0001,0.0001,0.0,0.0002,30,renege_rate
 Informative App,0.0001,0.0002,0.0001,0.0002,30,renege_rate
-VIP Priority,0.0001,0.0002,0.0,0.0001,30,renege_rate
+VIP Priority,0.0015,0.0006,0.0013,0.0017,30,renege_rate
 Baseline,0.0029,0.0014,0.0023,0.0034,30,renege_rate
-VIP Priority,3474.6333,100.9641,3436.9327,3512.334,30,served_general
 Active Management,3474.9333,100.8447,3437.2773,3512.5894,30,served_general
 Informative App,3474.9667,100.8579,3437.3057,3512.6276,30,served_general
+VIP Priority,3482.4667,104.9823,3443.2656,3521.6677,30,served_general
 Baseline,3491.9667,104.8873,3452.8011,3531.1322,30,served_general
 Active Management,495.6667,27.4306,485.4239,505.9094,30,served_vip
 Informative App,495.7333,27.5467,485.4472,506.0195,30,served_vip
-VIP Priority,496.7333,28.3268,486.1559,507.3107,30,served_vip
 Baseline,505.4667,22.3433,497.1235,513.8098,30,served_vip
+VIP Priority,512.1,22.9202,503.5415,520.6585,30,served_vip
 Active Management,0.4,0.4983,0.2139,0.5861,30,reneged_general
 Informative App,0.4333,0.5683,0.2211,0.6455,30,reneged_general
-VIP Priority,0.4333,0.8172,0.1282,0.7385,30,reneged_general
 Baseline,4.7,3.3441,3.4513,5.9487,30,reneged_general
+VIP Priority,8.2,3.595,6.8576,9.5424,30,reneged_general
 VIP Priority,0.0,0.0,0.0,0.0,30,reneged_vip
 Active Management,0.0667,0.2537,-0.0281,0.1614,30,reneged_vip
 Informative App,0.1,0.4026,-0.0503,0.2503,30,reneged_vip
