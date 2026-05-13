@@ -24,7 +24,7 @@ MAP_WIDTH  = WINDOW_WIDTH - HUD_WIDTH
 MAP_HEIGHT = WINDOW_HEIGHT
 
 # Tamanho dos sprites no ecrã
-SPRITE_SIZE = 18  # pixels — pequeno mas reconhecível
+SPRITE_SIZE = 26  # pixels — pequeno mas reconhecível
 
 
 def draw_aacircle(surface, x, y, r, color):

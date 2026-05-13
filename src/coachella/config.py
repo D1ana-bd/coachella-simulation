@@ -82,8 +82,8 @@ LOG_FILE = OUTPUT_DIR + "simulation.log"
 # ─────────────────────────────────────────────
 # VISUALIZAÇÃO (Pygame)
 # ─────────────────────────────────────────────
-WINDOW_WIDTH = 900
-WINDOW_HEIGHT = 600
+WINDOW_WIDTH  = 1280
+WINDOW_HEIGHT = 800
 FPS = 30
 SIM_SPEED = 0.5                 # multiplicador de velocidade da simulação
 
