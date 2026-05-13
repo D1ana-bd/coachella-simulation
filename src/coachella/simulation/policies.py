@@ -151,21 +151,9 @@ ACTIVE_MANAGEMENT = PolicyConfig(
 
 VIP_PRIORITY = PolicyConfig(
     name="VIP Priority",
-    app_enabled=True,
-    app_adoption_rate={
-        "general": 0.65,
-        "fan":     0.90,
-        "vip":     0.80,
-    },
-    info_delay=2.0,
-    active_management=True,
-    congestion_threshold=0.85,
-    compliance_rate={
-        "general": 0.70,
-        "fan":     0.50,
-        "vip":     0.30,
-    },
-    vip_priority=True,      # activa simpy.PriorityResource + prioridades diferenciadas
+    # Sem app, sem gestão ativa — efeito puro do sistema VIP.
+    # Comparável ao Baseline, mas com fila prioritária e Yuma exclusivo.
+    vip_priority=True,      # ativa simpy.PriorityResource + prioridades diferenciadas
 )
 
 # Lista ordenada para iterar nas análises comparativas
