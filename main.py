@@ -335,17 +335,17 @@ def _load_hud_assets():
             return pygame.font.SysFont("monospace", size, bold=True)
 
     _fonts.update({
-        "hud_title":   pf(8),
-        "hud_section": pf(7),
-        "hud_text":    pf(6),
-        "hud_small":   pf(5),
+        "hud_title": pf(11),  #
+        "hud_section": pf(9),  #
+        "hud_text": pf(8),  #
+        "hud_small": pf(7),  #
     })
 
     for key, fname in [("general","stripe_geral.png"),("fan","stripe_FAN.png"),("vip","stripe_VIP.png")]:
         try:
             img = pygame.image.load(os.path.join(ASSETS_DIR, fname)).convert_alpha()
             img.set_colorkey((0, 0, 0))
-            _hud_sprites[key] = pygame.transform.scale(img, (22, 22))
+            _hud_sprites[key] = pygame.transform.scale(img, (32, 32))
         except:
             _hud_sprites[key] = None
 
@@ -375,26 +375,24 @@ def draw_hud(surface: pygame.Surface, festival: FestivalEnvironment,
     # ── Helpers ───────────────────────────────────────────────────────
     def write(text, font_key="hud_text", color=(220, 195, 130), indent=12):
         nonlocal y
-        fnt  = f.get(font_key, f["hud_text"])
-        # Sombra
+        fnt = f.get(font_key, f["hud_text"])
         sh = fnt.render(text, True, (0, 0, 0))
         surface.blit(sh, (hx + indent + 1, y + 1))
         surf = fnt.render(text, True, color)
         surface.blit(surf, (hx + indent, y))
-        y += surf.get_height() + 5
+        y += surf.get_height() + 8  # era + 5, agora + 8
 
     def section(title, icon=""):
         nonlocal y
-        y += 4
-        # Fundo da secção — barra dourada escura
+        y += 8  # era 4
         pygame.draw.rect(surface, (60, 42, 12),
-                         (hx + 6, y, HUD_WIDTH - 12, 17))
+                         (hx + 6, y, HUD_WIDTH - 12, 22))  # era 17
         pygame.draw.rect(surface, (160, 110, 40),
-                         (hx + 6, y, HUD_WIDTH - 12, 17), 1)
-        fnt  = f.get("hud_section", f["hud_text"])
-        txt  = fnt.render(f"{icon} {title}", True, (255, 210, 60))
-        surface.blit(txt, (hx + 10, y + 2))
-        y += 22
+                         (hx + 6, y, HUD_WIDTH - 12, 22), 1)
+        fnt = f.get("hud_section", f["hud_text"])
+        txt = fnt.render(f"{icon} {title}", True, (255, 210, 60))
+        surface.blit(txt, (hx + 10, y + 4))
+        y += 30  # era 22
 
     def occ_bar(ratio, bar_w=HUD_WIDTH - 32, h=5):
         nonlocal y
@@ -489,7 +487,7 @@ def draw_hud(surface: pygame.Surface, festival: FestivalEnvironment,
         line = fnt.render(f"{label}  {data['served']:4d} ({pct:2d}%)",
                           True, dcol)
         surface.blit(line, (hx + 36, row_y + 5))
-        y = row_y + 26
+        y = row_y + 38   # era 26
 
         # Barra proporcional
         ratio_p = count / total_a if total_a > 0 else 0
