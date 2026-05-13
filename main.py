@@ -145,7 +145,7 @@ def _load_menu_assets():
         try:
             img = pygame.image.load(os.path.join(ASSETS_DIR, fname)).convert_alpha()
             img.set_colorkey((0, 0, 0))
-            _sprites[key] = pygame.transform.scale(img, (48, 48))
+            _sprites[key] = pygame.transform.scale(img, (56, 56))
         except:
             _sprites[key] = None
 
@@ -255,10 +255,10 @@ def draw_menu(surface: pygame.Surface, selected: int, hover: int):
 
     # ── Cards ─────────────────────────────────────────────────────────
     card_w  = panel_w - 50
-    card_h  = 76
+    card_h  = 80
     card_x  = panel_x + 25
     start_y = panel_y + 72
-    gap     = 8
+    gap     = 10
 
     for i, policy in enumerate(ALL_POLICIES):
         cy       = start_y + i * (card_h + gap)
@@ -319,113 +319,209 @@ def draw_menu(surface: pygame.Surface, selected: int, hover: int):
 # ─────────────────────────────────────────────
 # HUD LATERAL — informação em tempo real
 # ─────────────────────────────────────────────
+_hud_bg      = None
+_hud_sprites = {}
+
+def _load_hud_assets():
+    global _hud_sprites
+    if _hud_sprites:
+        return
+
+    font_path = os.path.join(ASSETS_DIR, "PressStart2P-Regular.ttf")
+    def pf(size):
+        try:
+            return pygame.font.Font(font_path, size)
+        except:
+            return pygame.font.SysFont("monospace", size, bold=True)
+
+    _fonts.update({
+        "hud_title":   pf(8),
+        "hud_section": pf(7),
+        "hud_text":    pf(6),
+        "hud_small":   pf(5),
+    })
+
+    for key, fname in [("general","stripe_geral.png"),("fan","stripe_FAN.png"),("vip","stripe_VIP.png")]:
+        try:
+            img = pygame.image.load(os.path.join(ASSETS_DIR, fname)).convert_alpha()
+            img.set_colorkey((0, 0, 0))
+            _hud_sprites[key] = pygame.transform.scale(img, (22, 22))
+        except:
+            _hud_sprites[key] = None
+
 
 def draw_hud(surface: pygame.Surface, festival: FestivalEnvironment,
              sim_time: float, done: bool, policy_name: str):
-    """Desenha o painel lateral direito com métricas em tempo real."""
     from src.coachella.data.lineup import get_active_show
+    _load_hud_assets()
+    f  = _fonts
+    hx = MAP_WIDTH
 
-    font_title = pygame.font.SysFont("monospace", 13, bold=True)
-    font_info  = pygame.font.SysFont("monospace", 11)
-    font_small = pygame.font.SysFont("monospace", 10)
-
-    hx = MAP_WIDTH  # início do painel
+    # ── Fundo base ────────────────────────────────────────────────────
     panel = pygame.Surface((HUD_WIDTH, WINDOW_HEIGHT))
-    panel.fill((18, 18, 32))
+    panel.fill((18, 14, 8))
+    surface.blit(panel, (hx, 0))
 
-    # Linha separadora
-    pygame.draw.line(panel, (60, 60, 90), (0, 0), (0, WINDOW_HEIGHT), 2)
+    # Borda esquerda dourada (separação do mapa)
+    pygame.draw.line(surface, (160, 110, 40), (hx, 0), (hx, WINDOW_HEIGHT), 3)
+    pygame.draw.line(surface, (255, 200, 60), (hx + 3, 0), (hx + 3, WINDOW_HEIGHT), 1)
 
-    y = 12
+    # Borda direita
+    pygame.draw.line(surface, (160, 110, 40),
+                     (hx + HUD_WIDTH - 1, 0), (hx + HUD_WIDTH - 1, WINDOW_HEIGHT), 2)
 
-    def write(text, font=font_info, color=COLORS["text"], indent=10):
+    y = 0
+
+    # ── Helpers ───────────────────────────────────────────────────────
+    def write(text, font_key="hud_text", color=(220, 195, 130), indent=12):
         nonlocal y
-        surf = font.render(text, True, color)
-        panel.blit(surf, (indent, y))
-        y += surf.get_height() + 3
+        fnt  = f.get(font_key, f["hud_text"])
+        # Sombra
+        sh = fnt.render(text, True, (0, 0, 0))
+        surface.blit(sh, (hx + indent + 1, y + 1))
+        surf = fnt.render(text, True, color)
+        surface.blit(surf, (hx + indent, y))
+        y += surf.get_height() + 5
 
-    def separator():
+    def section(title, icon=""):
         nonlocal y
-        pygame.draw.line(panel, (50, 50, 70), (8, y + 2), (HUD_WIDTH - 8, y + 2))
-        y += 10
+        y += 4
+        # Fundo da secção — barra dourada escura
+        pygame.draw.rect(surface, (60, 42, 12),
+                         (hx + 6, y, HUD_WIDTH - 12, 17))
+        pygame.draw.rect(surface, (160, 110, 40),
+                         (hx + 6, y, HUD_WIDTH - 12, 17), 1)
+        fnt  = f.get("hud_section", f["hud_text"])
+        txt  = fnt.render(f"{icon} {title}", True, (255, 210, 60))
+        surface.blit(txt, (hx + 10, y + 2))
+        y += 22
 
-    # ── Cabeçalho ────────────────────────────────────────────────────
-    write("COACHELLA", font_title, MENU_ACCENT)
-    write(f"Política: {policy_name}", color=MENU_SUBTEXT)
+    def occ_bar(ratio, bar_w=HUD_WIDTH - 32, h=5):
+        nonlocal y
+        bx = hx + 14
+        # Fundo
+        pygame.draw.rect(surface, (40, 30, 12), (bx, y, bar_w, h), border_radius=2)
+        fill_col = (
+            (220, 60,  60) if ratio >= 1.0 else
+            (255, 165,  0) if ratio >= 0.7 else
+            (80,  200, 120)
+        )
+        if ratio > 0:
+            pygame.draw.rect(surface, fill_col,
+                             (bx, y, int(bar_w * min(ratio, 1.0)), h),
+                             border_radius=2)
+        y += h + 3
+
+    # ── CABEÇALHO ─────────────────────────────────────────────────────
+    pygame.draw.rect(surface, (35, 26, 10), (hx, 0, HUD_WIDTH, 58))
+    pygame.draw.line(surface, (160, 110, 40),
+                     (hx + 6, 57), (hx + HUD_WIDTH - 6, 57), 1)
+
+    y = 8
+    write("COACHELLA", "hud_title", (255, 200, 50))
 
     real_h = int(12 + sim_time // 60)
     real_m = int(sim_time % 60)
-    write(f"Hora:  {real_h:02d}:{real_m:02d}  (t={sim_time:.0f}m)", color=(180, 220, 255))
-    write(f"Agentes ativos: {len(festival.active_agents)}")
-    separator()
+    write(f"{real_h:02d}:{real_m:02d}  t={sim_time:.0f}m", "hud_small", (180, 155, 90))
+    write(f"Agentes: {len(festival.active_agents)}", "hud_small", (180, 155, 90))
 
-    # ── Palcos ───────────────────────────────────────────────────────
-    write("PALCOS", font_title, MENU_ACCENT)
-    y += 4
+    y = 64
+    # Nome da política — badge colorido
+    pol_colors = {
+        "Baseline":          (100, 180, 255),
+        "Informative App":   (100, 220, 150),
+        "Active Management": (255, 160,  80),
+        "VIP Priority":      (255, 200,  50),
+    }
+    pc = pol_colors.get(policy_name, (200, 200, 200))
+    pygame.draw.rect(surface, (*pc, 180), (hx + 8, y, HUD_WIDTH - 16, 14))
+    fnt_s = f.get("hud_small", f["hud_text"])
+    pn = fnt_s.render(policy_name[:24], True, (20, 12, 4))
+    surface.blit(pn, (hx + HUD_WIDTH // 2 - pn.get_width() // 2, y + 2))
+    y += 20
+
+    # ── PALCOS ────────────────────────────────────────────────────────
+    section("PALCOS", "♪")
 
     for name, stage in festival.stages.items():
-        ratio = stage.occupancy / stage.capacity if stage.capacity else 0
-        if ratio >= 1.0:
-            bar_color = (220, 60, 60)
-        elif ratio >= 0.7:
-            bar_color = (255, 165, 0)
-        else:
-            bar_color = (80, 200, 120)
+        ratio  = stage.occupancy / stage.capacity if stage.capacity else 0
+        status = "CHEIO" if ratio >= 1.0 else f"{stage.occupancy}/{stage.capacity}"
 
-        # Nome curto
-        short = name[:14]
-        write(short, font_small, COLORS["text"], indent=10)
-        y -= (font_small.get_height() + 3)  # voltar para desenhar barra na mesma linha
+        dot_col = (
+            (220, 60,  60) if ratio >= 1.0 else
+            (255, 165,  0) if ratio >= 0.7 else
+            (80,  200, 120)
+        )
+        pygame.draw.circle(surface, dot_col, (hx + 13, y + 3), 4)
 
-        # Barra de ocupação
-        bar_x, bar_y = 110, y
-        bar_max = HUD_WIDTH - 120
-        bar_fill = int(bar_max * min(ratio, 1.0))
-        pygame.draw.rect(panel, (50, 50, 70), (bar_x, bar_y + 2, bar_max, 9), border_radius=4)
-        if bar_fill > 0:
-            pygame.draw.rect(panel, bar_color, (bar_x, bar_y + 2, bar_fill, 9), border_radius=4)
-        y += font_small.get_height() + 3
+        short = name[:11]
+        fnt   = f.get("hud_small", f["hud_text"])
+        txt   = fnt.render(f" {short:<11} {status}", True, (210, 185, 120))
+        surface.blit(txt, (hx + 18, y))
+        y += txt.get_height() + 2
+        occ_bar(ratio)
 
-        # Artista a tocar
         active = get_active_show(name, sim_time)
         if active:
-            write(f"  ♪ {active['artist'][:20]}", font_small, (255, 215, 0), indent=12)
+            write(f" ♪ {active['artist'][:17]}", "hud_small",
+                  (255, 210, 60), indent=18)
 
-        # Fila
-        write(f"  fila:{stage.queue_length}  ocp:{stage.occupancy}/{stage.capacity}",
-              font_small, MENU_SUBTEXT, indent=12)
+    # ── PERFIS ────────────────────────────────────────────────────────
+    section("PERFIS", "✦")
 
-    separator()
+    profile_data = festival.profile_summary()
+    sprite_keys  = ["general", "fan", "vip"]
+    labels       = ["GERAL", "FA", "VIP"]
+    dot_colors   = [(100, 180, 255), (100, 220, 150), (255, 200, 50)]
+    total_a      = sum(v["served"] + v["reneged"] for v in profile_data.values())
 
-    # ── Perfis ───────────────────────────────────────────────────────
-    write("PERFIS", font_title, MENU_ACCENT)
-    y += 4
-    profile_colors = {
-        "general": COLORS["agent_general"],
-        "fan":     COLORS["agent_fan"],
-        "vip":     COLORS["agent_vip"],
-    }
-    for profile_name, data in festival.profile_summary().items():
-        col = profile_colors.get(profile_name, COLORS["text"])
-        write(f"{profile_name:8s}  ✓{data['served']:4d}  ✗{data['reneged']:3d}",
-              font_small, col, indent=10)
+    for key, label, dcol in zip(sprite_keys, labels, dot_colors):
+        data   = profile_data.get(key, {"served": 0, "reneged": 0})
+        count  = data["served"] + data["reneged"]
+        pct    = int(count / total_a * 100) if total_a > 0 else 0
+        sprite = _hud_sprites.get(key)
 
-    separator()
+        row_y = y
+        if sprite:
+            surface.blit(sprite, (hx + 10, row_y))
 
-    # ── Global ───────────────────────────────────────────────────────
+        fnt  = f.get("hud_small", f["hud_text"])
+        line = fnt.render(f"{label}  {data['served']:4d} ({pct:2d}%)",
+                          True, dcol)
+        surface.blit(line, (hx + 36, row_y + 5))
+        y = row_y + 26
+
+        # Barra proporcional
+        ratio_p = count / total_a if total_a > 0 else 0
+        bw = HUD_WIDTH - 50
+        pygame.draw.rect(surface, (40, 30, 12), (hx + 36, y - 4, bw, 4), border_radius=2)
+        if ratio_p > 0:
+            pygame.draw.rect(surface, dcol,
+                             (hx + 36, y - 4, int(bw * ratio_p), 4), border_radius=2)
+        y += 4
+
+    # ── STATS ─────────────────────────────────────────────────────────
+    section("STATS", "▲")
+
     total_served  = sum(s.total_served  for s in festival.stages.values())
     total_reneged = sum(s.total_reneged for s in festival.stages.values())
-    write("GLOBAL", font_title, MENU_ACCENT)
-    write(f"Servidos:    {total_served}")
-    write(f"Desistiram:  {total_reneged}")
+    all_waits     = [w for s in festival.stages.values() for w in s.wait_times]
+    avg_wait      = sum(all_waits) / len(all_waits) if all_waits else 0.0
+
+    write(f"Servidos:   {total_served}", "hud_small", (210, 185, 120))
+    write(f"Desistiram: {total_reneged}", "hud_small", (210, 185, 120))
+    write(f"Esp.media:  {avg_wait:.1f}m", "hud_small", (210, 185, 120))
 
     if done:
-        separator()
-        write("✓ Simulação terminada!", font_title, (100, 255, 100))
-        write("Prima Q para sair.", color=MENU_SUBTEXT)
-
-    surface.blit(panel, (hx, 0))
-
+        y += 6
+        pygame.draw.rect(surface, (20, 60, 20),
+                         (hx + 8, y, HUD_WIDTH - 16, 20))
+        pygame.draw.rect(surface, (80, 200, 80),
+                         (hx + 8, y, HUD_WIDTH - 16, 20), 1)
+        msg = f.get("hud_small").render("SIMULACAO CONCLUIDA!", True, (100, 255, 100))
+        surface.blit(msg, (hx + HUD_WIDTH // 2 - msg.get_width() // 2, y + 4))
+        y += 28
+        write("Prima Q para sair.", "hud_small", (150, 200, 150))
 
 # ─────────────────────────────────────────────
 # LOOP PRINCIPAL PYGAME

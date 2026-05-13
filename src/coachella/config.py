@@ -50,7 +50,7 @@ STAGES = {
     },
 }
 
-FESTIVAL_ENTRANCE = {"x": 480, "y": 570}
+FESTIVAL_ENTRANCE = {"x": 310, "y": 555}
 
 # ─────────────────────────────────────────────
 # FILAS DE ESPERA
