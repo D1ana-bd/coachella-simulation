@@ -67,8 +67,50 @@ def run_simulation(festival: FestivalEnvironment, done_flag: threading.Event):
 
 
 # ─────────────────────────────────────────────
-# MENU — escolha de política
+# ASSETS DO MENU
 # ─────────────────────────────────────────────
+
+import os
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "src", "coachella", "assets")
+
+_menu_bg   = None
+_sprites   = {}
+
+def _load_menu_assets():
+    global _menu_bg, _sprites
+    if _menu_bg is not None:
+        return
+
+    # Fundo
+    try:
+        img = pygame.image.load(os.path.join(ASSETS_DIR, "fundo_menu.png")).convert()
+        _menu_bg = pygame.transform.scale(img, (WINDOW_WIDTH, WINDOW_HEIGHT))
+    except Exception as e:
+        logger.warning("fundo_menu.png não carregado: %s", e)
+        _menu_bg = None
+
+    # Sprites (pequenos, para os cards)
+    for key, fname in [("general","stripe_geral.png"),("fan","stripe_FAN.png"),("vip","stripe_VIP.png")]:
+        try:
+            img = pygame.image.load(os.path.join(ASSETS_DIR, fname)).convert_alpha()
+            img.set_colorkey((0, 0, 0))
+            _sprites[key] = pygame.transform.scale(img, (38, 38))
+        except:
+            _sprites[key] = None
+
+
+# ─────────────────────────────────────────────
+# MENU REESCRITO
+# ─────────────────────────────────────────────
+
+POLICY_COLORS = [
+    (100, 180, 255),   # Baseline     — azul
+    (100, 220, 150),   # Informative  — verde
+    (255, 160,  80),   # Active Mgmt  — laranja
+    (255, 200,  50),   # VIP Priority — dourado
+]
+
+POLICY_SPRITE_KEYS = ["general", "general", "general", "vip"]
 
 POLICY_DESCRIPTIONS = [
     "Sem app. Agentes escolhem livremente.",
@@ -78,71 +120,112 @@ POLICY_DESCRIPTIONS = [
 ]
 
 def draw_menu(surface: pygame.Surface, selected: int, hover: int):
-    """Renderiza o ecrã de seleção de política."""
-    surface.fill(MENU_BG)
+    _load_menu_assets()
 
-    font_title  = pygame.font.SysFont("monospace", 28, bold=True)
-    font_sub    = pygame.font.SysFont("monospace", 13)
-    font_card   = pygame.font.SysFont("monospace", 16, bold=True)
-    font_desc   = pygame.font.SysFont("monospace", 12)
-    font_hint   = pygame.font.SysFont("monospace", 12)
+    # ── Fundo ────────────────────────────────────────────────────────
+    if _menu_bg:
+        surface.blit(_menu_bg, (0, 0))
+    else:
+        surface.fill((20, 15, 10))
 
-    # ── Título ──────────────────────────────────────────────────────
-    title = font_title.render("COACHELLA SIMULATION", True, MENU_ACCENT)
-    surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 40))
+    # ── Overlay escuro central para legibilidade ──────────────────────
+    overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 80))
+    surface.blit(overlay, (0, 0))
 
-    sub = font_sub.render("Seleciona uma política de gestão de multidões", True, MENU_SUBTEXT)
-    surface.blit(sub, (WINDOW_WIDTH // 2 - sub.get_width() // 2, 80))
+    font_title = pygame.font.SysFont("monospace", 26, bold=True)
+    font_sub   = pygame.font.SysFont("monospace", 11)
+    font_card  = pygame.font.SysFont("monospace", 15, bold=True)
+    font_desc  = pygame.font.SysFont("monospace", 11)
+    font_hint  = pygame.font.SysFont("monospace", 11)
 
-    # ── Cards de política ────────────────────────────────────────────
-    card_w, card_h = 360, 90
-    start_y = 130
-    gap = 16
+    # ── Painel central semitransparente ──────────────────────────────
+    panel_w, panel_h = 520, 460
+    panel_x = WINDOW_WIDTH // 2 - panel_w // 2
+    panel_y = 55
+
+    panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+    panel.fill((30, 20, 10, 200))   # castanho escuro semitransparente
+    surface.blit(panel, (panel_x, panel_y))
+
+    # Borda pixel art — dupla linha dourada
+    pygame.draw.rect(surface, (180, 130, 40),
+                     (panel_x, panel_y, panel_w, panel_h), 3)
+    pygame.draw.rect(surface, (255, 200, 80),
+                     (panel_x + 4, panel_y + 4, panel_w - 8, panel_h - 8), 1)
+
+    # ── Título ────────────────────────────────────────────────────────
+    title = font_title.render("✦  COACHELLA SIMULATION  ✦", True, (255, 210, 60))
+    surface.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, panel_y + 14))
+
+    sub = font_sub.render("SELECIONA UMA POLÍTICA DE GESTÃO DE MULTIDÕES",
+                          True, (200, 180, 120))
+    surface.blit(sub, (WINDOW_WIDTH // 2 - sub.get_width() // 2, panel_y + 46))
+
+    # Separador
+    pygame.draw.line(surface, (180, 130, 40),
+                     (panel_x + 20, panel_y + 64),
+                     (panel_x + panel_w - 20, panel_y + 64), 1)
+
+    # ── Cards ─────────────────────────────────────────────────────────
+    card_w, card_h = panel_w - 40, 72
+    card_x = panel_x + 20
+    start_y = panel_y + 74
+    gap = 10
 
     for i, policy in enumerate(ALL_POLICIES):
-        cx = WINDOW_WIDTH // 2 - card_w // 2
         cy = start_y + i * (card_h + gap)
-
         is_hover = (i == hover)
         is_sel   = (i == selected)
+        col      = POLICY_COLORS[i]
 
         # Fundo do card
-        bg_color = MENU_CARD_HOV if is_hover else MENU_CARD
-        rect = pygame.Rect(cx, cy, card_w, card_h)
-        pygame.draw.rect(surface, bg_color, rect, border_radius=10)
+        card_alpha = 220 if is_hover else 170
+        card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        if is_hover:
+            card_surf.fill((60, 45, 20, card_alpha))
+        else:
+            card_surf.fill((40, 28, 10, card_alpha))
+        surface.blit(card_surf, (card_x, cy))
 
-        # Borda colorida se hover ou selecionado
-        border_color = POLICY_COLORS[i] if (is_hover or is_sel) else (60, 60, 80)
-        pygame.draw.rect(surface, border_color, rect, width=2, border_radius=10)
+        # Borda colorida
+        border_col = col if (is_hover or is_sel) else (100, 80, 40)
+        border_w   = 2 if (is_hover or is_sel) else 1
+        pygame.draw.rect(surface, border_col,
+                         (card_x, cy, card_w, card_h), border_w)
 
-        # Número
-        num = font_card.render(f"{i + 1}", True, POLICY_COLORS[i])
-        surface.blit(num, (cx + 18, cy + card_h // 2 - num.get_height() // 2))
+        # Número (badge)
+        badge_surf = pygame.Surface((28, 28), pygame.SRCALPHA)
+        badge_surf.fill((*col, 200))
+        surface.blit(badge_surf, (card_x + 8, cy + card_h // 2 - 14))
+        num = font_card.render(str(i + 1), True, (20, 15, 5))
+        surface.blit(num, (card_x + 8 + 14 - num.get_width() // 2,
+                            cy + card_h // 2 - num.get_height() // 2))
+
+        # Sprite do agente
+        sprite = _sprites.get(POLICY_SPRITE_KEYS[i])
+        if sprite:
+            surface.blit(sprite, (card_x + 44, cy + card_h // 2 - 19))
 
         # Nome da política
-        name_surf = font_card.render(policy.name, True, MENU_TEXT)
-        surface.blit(name_surf, (cx + 50, cy + 20))
+        name_surf = font_card.render(policy.name.upper(), True, col)
+        surface.blit(name_surf, (card_x + 92, cy + 14))
 
         # Descrição
-        desc_surf = font_desc.render(POLICY_DESCRIPTIONS[i], True, MENU_SUBTEXT)
-        surface.blit(desc_surf, (cx + 50, cy + 48))
+        desc_surf = font_desc.render(POLICY_DESCRIPTIONS[i], True, (200, 185, 145))
+        surface.blit(desc_surf, (card_x + 92, cy + 38))
 
-        # Badge "▶ ENTER" se hover
+        # Seta ▶ se hover
         if is_hover:
-            badge = font_hint.render("▶  ENTER para iniciar", True, POLICY_COLORS[i])
-            surface.blit(badge, (cx + card_w - badge.get_width() - 16,
-                                 cy + card_h - badge.get_height() - 10))
+            arrow = font_card.render("▶", True, col)
+            surface.blit(arrow, (card_x + card_w - arrow.get_width() - 12,
+                                  cy + card_h // 2 - arrow.get_height() // 2))
 
-    # ── Hint de navegação ────────────────────────────────────────────
-    hint_y = start_y + len(ALL_POLICIES) * (card_h + gap) + 20
-    hints = [
-        "↑ ↓  ou  1 2 3 4  para navegar",
-        "ENTER  para iniciar   |   Q  para sair",
-    ]
-    for line in hints:
-        h = font_hint.render(line, True, MENU_SUBTEXT)
-        surface.blit(h, (WINDOW_WIDTH // 2 - h.get_width() // 2, hint_y))
-        hint_y += 22
+    # ── Hint de navegação ─────────────────────────────────────────────
+    hint_y = panel_y + panel_h - 28
+    hint = font_hint.render("◄ ► ou  1 2 3 4  para navegar   |   ENTER para iniciar   |   Q para sair",
+                             True, (160, 140, 90))
+    surface.blit(hint, (WINDOW_WIDTH // 2 - hint.get_width() // 2, hint_y))
 
 
 # ─────────────────────────────────────────────
