@@ -139,17 +139,23 @@ class TestVIPPriority:
     def test_vip_priority_enabled(self):
         assert VIP_PRIORITY.vip_priority is True
 
-    def test_active_management_enabled(self):
-        assert VIP_PRIORITY.active_management is True
+    def test_active_management_disabled(self):
+        """VIP Priority isolado — sem gestão ativa."""
+        assert VIP_PRIORITY.active_management is False
 
-    def test_app_enabled(self):
-        assert VIP_PRIORITY.app_enabled is True
+    def test_app_disabled(self):
+        """VIP Priority isolado — sem app."""
+        assert VIP_PRIORITY.app_enabled is False
 
-    def test_inherits_same_rates_as_active(self):
-        """VIP Priority baseia-se na Gestão Ativa — taxas devem ser iguais."""
-        assert VIP_PRIORITY.app_adoption_rate == ACTIVE_MANAGEMENT.app_adoption_rate
-        assert VIP_PRIORITY.compliance_rate == ACTIVE_MANAGEMENT.compliance_rate
-        assert VIP_PRIORITY.congestion_threshold == ACTIVE_MANAGEMENT.congestion_threshold
+    def test_app_adoption_all_zero(self):
+        """Sem app — taxas de adoção todas a zero."""
+        for rate in VIP_PRIORITY.app_adoption_rate.values():
+            assert rate == 0.0
+
+    def test_compliance_all_zero(self):
+        """Sem gestão ativa — compliance a zero."""
+        for rate in VIP_PRIORITY.compliance_rate.values():
+            assert rate == 0.0
 
 
 # ─────────────────────────────────────────────
