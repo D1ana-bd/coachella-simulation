@@ -42,9 +42,7 @@ class Stage:
         self.y = config["y"]
         self.is_open = False  # palco fechado até ao primeiro show
         self.vip_only = config.get("vip_only", False)
-        # Agentes ativos (para visualização)
-        self.active_agents: list = []
-        self.all_agents: list = []  # ← adicionar esta linha
+
 
         # Recurso SimPy: PriorityResource se política VIP, Resource normal caso contrário
         if policy is not None and policy.vip_priority:
@@ -115,6 +113,9 @@ class FestivalEnvironment:
         self.env = simpy.Environment()
         self.rng = random.Random(seed)
         self.np_rng = np.random.default_rng(seed)
+        # Agentes ativos (para visualização)
+        self.active_agents: list = []
+        self.all_agents: list = []  #
 
         from src.coachella.simulation.policies import BASELINE
         self.policy = policy or BASELINE
