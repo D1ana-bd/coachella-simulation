@@ -83,9 +83,9 @@ class TestRunSingle:
             assert f"renege_rate_{key}" in single_result
 
     def test_has_stage_metrics(self, single_result):
-        for stage_name in ["main_stage", "sahara_stage", "outdoor_stage"]:
-            assert f"served_{stage_name}"   in single_result
-            assert f"reneged_{stage_name}"  in single_result
+        for stage_name in ["coachella_stage", "sahara", "outdoor_theatre"]:
+            assert f"served_{stage_name}" in single_result
+            assert f"reneged_{stage_name}" in single_result
             assert f"avg_wait_{stage_name}" in single_result
 
     def test_total_served_non_negative(self, single_result):
