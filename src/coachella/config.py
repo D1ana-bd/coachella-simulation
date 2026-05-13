@@ -17,40 +17,40 @@ NUM_REPLICAS = 30       # réplicas por política (garante normalidade assintót
 # ─────────────────────────────────────────────
 STAGES = {
     "Coachella Stage": {
-        "capacity": 500, "x": 310, "y": 75,
+        "capacity": 500, "x": 500, "y": 95,
         "popularity": 0.35, "vip_only": False,
     },
     "Sahara": {
-        "capacity": 400, "x": 130, "y": 430,
+        "capacity": 400, "x": 210, "y": 560,
         "popularity": 0.25, "vip_only": False,
     },
     "Outdoor Theatre": {
-        "capacity": 300, "x": 530, "y": 90,
+        "capacity": 300, "x": 850, "y": 110,
         "popularity": 0.15, "vip_only": False,
     },
     "Mojave": {
-        "capacity": 200, "x": 560, "y": 430,
+        "capacity": 200, "x": 870, "y": 490,
         "popularity": 0.10, "vip_only": False,
     },
     "Gobi": {
-        "capacity": 150, "x": 490, "y": 340,
+        "capacity": 150, "x": 700, "y": 390,
         "popularity": 0.07, "vip_only": False,
     },
     "Sonora": {
-        "capacity": 100, "x": 460, "y": 230,
+        "capacity": 100, "x": 630, "y": 255,
         "popularity": 0.04, "vip_only": False,
     },
     "Do Lab": {
-        "capacity": 100, "x": 350, "y": 490,
+        "capacity": 100, "x": 500, "y": 620,
         "popularity": 0.04, "vip_only": False,
     },
     "Yuma": {
-        "capacity": 80, "x": 80, "y": 310,
+        "capacity": 80, "x": 105, "y": 390,
         "popularity": 0.10, "vip_only": True,
     },
 }
 
-FESTIVAL_ENTRANCE = {"x": 310, "y": 555}
+FESTIVAL_ENTRANCE = {"x": 500, "y": 750}
 
 # ─────────────────────────────────────────────
 # FILAS DE ESPERA

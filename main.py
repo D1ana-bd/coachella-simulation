@@ -510,6 +510,23 @@ def draw_hud(surface: pygame.Surface, festival: FestivalEnvironment,
     write(f"Desistiram: {total_reneged}", "hud_small", (210, 185, 120))
     write(f"Esp.media:  {avg_wait:.1f}m", "hud_small", (210, 185, 120))
 
+    # No final do draw_hud, antes do `if done:`
+    section("LEGENDA", "?")
+
+    legend_items = [
+        (_hud_sprites.get("general"), "GERAL — livre", (100, 180, 255)),
+        (_hud_sprites.get("fan"), "FA — favorito", (100, 220, 150)),
+        (_hud_sprites.get("vip"), "VIP — prioritario", (255, 200, 50)),
+    ]
+    for sprite, label, col in legend_items:
+        row_y = y
+        if sprite:
+            surface.blit(sprite, (hx + 10, row_y))
+        fnt = f.get("hud_small", f["hud_text"])
+        txt = fnt.render(label, True, col)
+        surface.blit(txt, (hx + 46, row_y + 8))
+        y = row_y + 38
+
     if done:
         y += 6
         pygame.draw.rect(surface, (20, 60, 20),
