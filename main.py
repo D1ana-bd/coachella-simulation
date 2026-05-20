@@ -632,12 +632,12 @@ def main():
         map_surface.fill(COLORS["background"])
         festival_map.draw(map_surface, festival=festival)
 
-        # DEBUG — mostrar coordenadas do rato (remover depois)
-        mx, my = pygame.mouse.get_pos()
+        # DEBUG — mostrar coordenadas do rato
+        """mx, my = pygame.mouse.get_pos()
         if mx < MAP_WIDTH:
             debug_font = pygame.font.SysFont("monospace", 12)
             coord_surf = debug_font.render(f"x={mx} y={my}", True, (255, 255, 0))
-            screen.blit(coord_surf, (mx + 10, my - 15))
+            screen.blit(coord_surf, (mx + 10, my - 15)) """
             
         # HUD lateral (direita)
         sim_time = festival.env.now
