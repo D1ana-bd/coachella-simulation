@@ -17,7 +17,7 @@ coachella-simulation/
 │   ├── data/                # Lineup Coachella 2023
 │   ├── assets/              # Imagens e sprites
 │   └── config.py            # Parâmetros centrais
-├── tests/                   # 122 testes (pytest)
+├── tests/                   # testes (pytest)
 ├── notebooks/
 │   └── coachella_analysis.ipynb   # Relatório de análise completo
 ├── results/                 # CSVs e gráficos gerados
@@ -100,5 +100,5 @@ Resultados detalhados em `docs/results.md` e `notebooks/coachella_analysis.ipynb
 ---
 ## Autora
 
-Diana — Licenciatura em Ciência de Dados Aplicada  
+Diana Dória — Licenciatura em Ciência de Dados Aplicada  
 Unidade Curricular: Simulação Orientada a Dados
