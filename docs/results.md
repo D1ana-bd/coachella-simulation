@@ -12,7 +12,7 @@ Todos os cenários correram com os mesmos parâmetros: 10.000 agentes, 8 palcos,
 
 ## 2. Número de Repetições
 
-Cada política foi simulada com 30 réplicas independentes, usando seeds sequenciais (seed_i = 100 + i). Escolhi 30 réplicas porque garante normalidade assintótica das médias pelo Teorema do Limite Central, o que é necessário para usar intervalos de confiança via t-Student. No total foram 120 simulações.
+Cada política foi simulada com 30 réplicas independentes, usando seeds sequenciais (seed_i = 100 + i). Escolhi 30 réplicas porque é o valor a partir do qual o Teorema do Limite Central garante que a distribuição das médias amostrais é aproximadamente normal, o que permite calcular intervalos de confiança via t-Student mesmo que os dados individuais não sigam uma distribuição Normal. No total foram 120 simulações.
 
 ---
 
@@ -47,9 +47,9 @@ Usei seeds fixas e determinísticas para garantir reproducibilidade total. Não 
 | Política | Espera (min) | Desistências | Throughput (ag/h) | Gini |
 |---|---|---|---|---|
 | Baseline | 0.377 ± 0.027 | 15.7 ± 3.0 | 679.95 ± 6.4 | 0.953 ± 0.002 |
-| Informative App | 0.067 ± 0.023 | 0.57 ± 0.31 | 675.58 ± 7.5 | 0.907 ± 0.092 |
-| Active Management | 0.068 ± 0.024 | 0.50 ± 0.27 | 675.66 ± 7.5 | 0.906 ± 0.092 |
-| VIP Priority | 0.373 ± 0.029 | 8.27 ± 1.33 | 680.18 ± 6.5 | 0.962 ± 0.002 |
+| Informative App | 0.067 ± 0.023 | 0.6 ± 0.3 | 675.58 ± 7.5 | 0.907 ± 0.247 |
+| Active Management | 0.068 ± 0.024 | 0.5 ± 0.3 | 675.66 ± 7.5 | 0.906 ± 0.247 |
+| VIP Priority | 0.373 ± 0.029 | 8.3 ± 1.3 | 680.18 ± 6.5 | 0.962 ± 0.003 |
 
 ### Testes estatísticos (Mann-Whitney U, avg_wait_time, α=0.05)
 
@@ -57,10 +57,10 @@ Usei seeds fixas e determinísticas para garantir reproducibilidade total. Não 
 |---|---|---|---|
 | Baseline vs Informative App | < 0.0001 | 0.858 | Sim |
 | Baseline vs Active Management | < 0.0001 | 0.858 | Sim |
+| Baseline vs VIP Priority | 0.7394 | 0.043 | Não |
+| Informative App vs Active Management | 0.9587 | 0.007 | Não |
 | Informative App vs VIP Priority | < 0.0001 | 0.858 | Sim |
 | Active Management vs VIP Priority | < 0.0001 | 0.858 | Sim |
-| Baseline vs VIP Priority | > 0.95 | < 0.01 | Não |
-| Informative App vs Active Management | > 0.95 | < 0.01 | Não |
 
 ### Novos indicadores
 

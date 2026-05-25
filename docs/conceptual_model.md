@@ -4,6 +4,7 @@
 **Autora:** Diana Dória
 **Número:** 251923003
 **Data:** Maio 2026
+**GitHub:** https://github.com/D1ana-bd/coachella-simulation.git
 
 ---
 
